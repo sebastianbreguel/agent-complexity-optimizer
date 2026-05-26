@@ -1,0 +1,23 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "complexity-optimizer",
+  "description": "Universal complexity optimizer for AI coding agents. Scans codebases for O(n^2) loops, N+1 queries, sort-in-loop, membership checks, and render-path hotspots. Produces safe optimization reports.",
+  "owner": {
+    "name": "sebastianbreguel",
+    "email": "breguelsebastian@gmail.com"
+  },
+  "plugins": [
+    {
+      "name": "complexity-optimizer",
+      "description": "Analyze a codebase for algorithmic complexity hotspots and produce safe optimization reports. Finds nested loops, N+1 queries, sorts inside loops, .includes() instead of Set, and expensive render-path transforms. Report only by default — no files touched unless you ask.",
+      "version": "1.0.0",
+      "category": "development",
+      "source": "./skills/complexity-optimizer",
+      "homepage": "https://github.com/sebastianbreguel/agent-complexity-optimizer",
+      "skills": [
+        "./"
+      ],
+      "strict": false
+    }
+  ]
+}

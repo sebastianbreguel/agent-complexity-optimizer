@@ -20,6 +20,7 @@
     "postinstall": "node scripts/install.js --silent"
   },
   "files": [
+    ".claude-plugin",
     "skills",
     "agents",
     "scripts/install.js",

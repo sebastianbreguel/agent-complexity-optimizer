@@ -8,7 +8,14 @@ Based on [codex-complexity-optimizer](https://github.com/Kappaemme-git/codex-com
 
 ## Install
 
-### Claude Code
+### Claude Code (marketplace)
+
+```bash
+/plugin marketplace add sebastianbreguel/agent-complexity-optimizer
+/plugin install complexity-optimizer@complexity-optimizer
+```
+
+Or via `npx skills add`:
 
 ```bash
 npx skills add sebastianbreguel/agent-complexity-optimizer -a claude-code -g -y
