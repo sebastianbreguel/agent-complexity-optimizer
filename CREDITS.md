@@ -18,7 +18,8 @@ This project extends the original Codex-only skill into a universal installer th
 | Agent | Format | Original |
 |-------|--------|----------|
 | Codex (OpenAI) | `SKILL.md` + `openai.yaml` | Yes (by Kappaemme) |
-| Claude Code | Custom command `.md` | New |
+| Claude Code | `npx skills add` + slash command | New |
+| Pi | `pi.skills` npm metadata | New |
 | Cursor | `.mdc` rule | New |
 | Windsurf (Codeium) | `.windsurfrules` | New |
 | GitHub Copilot | `copilot-instructions.md` | New |

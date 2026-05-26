@@ -1,33 +1,40 @@
 {
   "name": "agent-complexity-optimizer",
   "version": "1.0.0",
-  "description": "Universal complexity optimizer for all AI coding agents — Claude Code, Codex, Cursor, Windsurf, Copilot, Gemini CLI, Cline, Aider, OpenCode, Continue.dev, Amazon Q, Zed AI.",
+  "description": "Universal complexity optimizer for all AI coding agents — Claude Code, Codex, Pi, Cursor, Windsurf, Copilot, Gemini CLI, Cline, Aider, OpenCode, and more.",
   "license": "MIT",
   "type": "commonjs",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/seba-brg/agent-complexity-optimizer.git"
+    "url": "git+https://github.com/sebastianbreguel/agent-complexity-optimizer.git"
   },
   "bugs": {
-    "url": "https://github.com/seba-brg/agent-complexity-optimizer/issues"
+    "url": "https://github.com/sebastianbreguel/agent-complexity-optimizer/issues"
   },
-  "homepage": "https://github.com/seba-brg/agent-complexity-optimizer#readme",
+  "homepage": "https://github.com/sebastianbreguel/agent-complexity-optimizer#readme",
   "bin": {
     "agent-complexity-optimizer": "scripts/install.js"
   },
   "scripts": {
-    "install-skill": "node scripts/install.js",
+    "install-other-agents": "node scripts/install.js",
     "postinstall": "node scripts/install.js --silent"
   },
   "files": [
-    "core",
+    "skills",
     "agents",
     "scripts/install.js",
     "README.md",
     "CREDITS.md",
     "LICENSE"
   ],
+  "pi": {
+    "skills": [
+      "./skills"
+    ]
+  },
   "keywords": [
+    "pi-package",
+    "agent-skills",
     "complexity",
     "performance",
     "optimization",

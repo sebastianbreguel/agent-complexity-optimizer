@@ -1,8 +1,9 @@
+---
+name: complexity-optimizer
+description: Analyze a software codebase for algorithmic complexity and performance hotspots, then propose or implement safe optimizations without breaking behavior. Use when asked to scan files, find inefficient loops, nested iteration, repeated scans, costly rendering/recomputation, N+1 queries, avoidable O(n^2) or O(n) operations, or reduce complexity such as O(n^2) to O(n log n) / O(n), while preserving tests, APIs, outputs, and maintainability.
+---
+
 # Complexity Optimizer
-
-Analyze a software codebase for algorithmic complexity and performance hotspots, then propose or implement safe optimizations without breaking behavior.
-
-Use when asked to scan files, find inefficient loops, nested iteration, repeated scans, costly rendering/recomputation, N+1 queries, avoidable O(n^2) or O(n) operations, or reduce complexity (e.g. O(n^2) to O(n log n) / O(n)), while preserving tests, APIs, outputs, and maintainability.
 
 ## Core Rule
 
@@ -10,7 +11,7 @@ Optimize only when the current behavior is understood and can be preserved. Pref
 
 ## Default Behavior
 
-When asked to analyze, scan, audit, review, or "give me a report" for a codebase, produce the full complexity report automatically. Do not require the user to specify report fields.
+When the user asks to analyze, scan, audit, review, or "give me a report" for a codebase, produce the full complexity report automatically. Do not require the user to specify report fields.
 
 Default report contents:
 
@@ -32,7 +33,7 @@ Only edit files when the user asks to implement, fix, optimize, apply, change, r
 1. Establish the baseline:
    - Identify the language, framework, test command, build command, and performance-sensitive paths.
    - Inspect existing tests before touching code.
-   - Run `analyze_complexity.py <repo>` for a first-pass hotspot list when scanning a repository.
+   - Run `scripts/analyze_complexity.py <repo>` for a first-pass hotspot list when scanning a repository.
 
 2. Rank opportunities:
    - Prioritize code on hot paths, large input paths, rendering loops, database/API loops, and shared utilities.
@@ -58,14 +59,14 @@ Only edit files when the user asks to implement, fix, optimize, apply, change, r
 
 ## First-Pass Scanner
 
-Use the bundled scanner:
+Use the bundled scanner from the skill directory:
 
 ```bash
-python3 analyze_complexity.py /path/to/repo --format markdown
-python3 analyze_complexity.py /path/to/repo --format json
+python3 scripts/analyze_complexity.py /path/to/repo --format markdown
+python3 scripts/analyze_complexity.py /path/to/repo --format json
 ```
 
-The scanner flags common patterns in Python, JavaScript, TypeScript, JSX/TSX, Java, Go, C, C++, C#, Ruby, PHP, Swift, Rust, Kotlin, Scala, Lua, Zig, Elixir, Erlang, Dart, R, Julia, OCaml, Clojure, and more.
+The scanner flags common patterns in Python, JavaScript, TypeScript, JSX/TSX, Java, Go, C, C++, C#, Ruby, PHP, Swift, Rust, Kotlin, Scala, and more. It intentionally favors readable leads over perfect static analysis.
 
 If the scanner reports nothing, still inspect known hot paths manually. Rendering churn, database query patterns, and framework lifecycle issues often require repository-specific context.
 
@@ -85,3 +86,8 @@ After editing:
 - Run the narrow test first, then the broadest relevant test/build command.
 - Compare before/after benchmark numbers when a benchmark exists or was added.
 - Keep the patch localized. Avoid formatting churn in unrelated files.
+
+## References
+
+- Read `references/optimization-playbook.md` for common O(n^2) to O(n log n) / O(n) transformations and framework-specific patterns.
+- Read `references/report-template.md` when preparing the final analysis or audit output.

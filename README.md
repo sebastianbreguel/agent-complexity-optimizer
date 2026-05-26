@@ -2,25 +2,41 @@
 
 Universal complexity optimizer for AI coding agents. Scans your codebase for algorithmic complexity hotspots (nested loops, N+1 queries, O(n^2) patterns) and produces safe optimization reports.
 
-Works with **every major AI coding agent**: Claude Code, Codex, Cursor, Windsurf, GitHub Copilot, Gemini CLI, Cline/Roo Code, Aider, OpenCode, Continue.dev, Amazon Q Developer, and Zed AI.
+Works with **every major AI coding agent**: Claude Code, Codex, Pi, Cursor, Windsurf, GitHub Copilot, Gemini CLI, Cline/Roo Code, Aider, OpenCode, Continue.dev, Amazon Q Developer, and Zed AI.
 
-Based on [codex-complexity-optimizer](https://github.com/Kappaemme-git/codex-complexity-optimizer) by [Kappaemme](https://github.com/Kappaemme-git). See [CREDITS.md](CREDITS.md) for details.
+Based on [codex-complexity-optimizer](https://github.com/Kappaemme-git/codex-complexity-optimizer) by [Kappaemme](https://github.com/Kappaemme-git). See [CREDITS.md](CREDITS.md) for full attribution.
 
 ## Install
+
+### Claude Code
+
+```bash
+npx skills add sebastianbreguel/agent-complexity-optimizer -a claude-code -g -y
+```
+
+### Codex
+
+```bash
+npx skills add sebastianbreguel/agent-complexity-optimizer -a codex -g -y
+```
+
+### Pi
+
+Pi loads skills from npm packages with `pi.skills` metadata:
 
 ```bash
 npm install -g agent-complexity-optimizer
 ```
 
-The installer auto-detects which agents you have and installs the right format for each.
-
-Or run without installing:
+### All other agents (auto-detect)
 
 ```bash
 npx agent-complexity-optimizer
 ```
 
-Use `--dry-run` to preview what would be installed:
+The fallback installer auto-detects which agents you have (Cursor, Windsurf, Copilot, Gemini CLI, Cline/Roo, Aider, OpenCode, Continue.dev, Amazon Q, Zed AI) and installs the right format for each.
+
+Use `--dry-run` to preview:
 
 ```bash
 npx agent-complexity-optimizer --dry-run
@@ -28,24 +44,25 @@ npx agent-complexity-optimizer --dry-run
 
 ## Supported Agents
 
-| Agent | Config format | Install location |
-|-------|--------------|-----------------|
-| Codex (OpenAI) | `SKILL.md` | `~/.codex/skills/complexity-optimizer/` |
-| Claude Code | Custom command | `~/.claude/commands/complexity-optimizer/` |
-| Cursor | `.mdc` rule | `~/.cursor/rules/` |
-| Windsurf | `.windsurfrules` | `~/.codeium/windsurf/complexity-optimizer/` |
-| GitHub Copilot | `copilot-instructions.md` | `~/.github/complexity-optimizer/` |
-| Gemini CLI | `GEMINI.md` | `~/.gemini/complexity-optimizer/` |
-| Cline / Roo Code | `.clinerules` | `~/.cline/complexity-optimizer/` |
-| Aider | `CONVENTIONS.md` | `~/.aider/complexity-optimizer/` |
-| OpenCode | `AGENTS.md` | `~/.opencode/complexity-optimizer/` |
-| Continue.dev | Custom command YAML | `~/.continue/complexity-optimizer/` |
-| Amazon Q | Rules `.md` | `~/.amazonq/complexity-optimizer/` |
-| Zed AI | Assistant rules | `~/.config/zed/complexity-optimizer/` |
+| Agent | Install method | Config format |
+|-------|---------------|--------------|
+| Claude Code | `npx skills add` | SKILL.md (slash command) |
+| Codex (OpenAI) | `npx skills add` | SKILL.md + openai.yaml |
+| Pi | npm install (pi.skills) | SKILL.md |
+| Cursor | auto-detect installer | `.mdc` rule |
+| Windsurf (Codeium) | auto-detect installer | `.windsurfrules` |
+| GitHub Copilot | auto-detect installer | `copilot-instructions.md` |
+| Gemini CLI | auto-detect installer | `GEMINI.md` |
+| Cline / Roo Code | auto-detect installer | `.clinerules` |
+| Aider | auto-detect installer | `CONVENTIONS.md` |
+| OpenCode | auto-detect installer | `AGENTS.md` |
+| Continue.dev | auto-detect installer | Custom command YAML |
+| Amazon Q Developer | auto-detect installer | Rules `.md` |
+| Zed AI | auto-detect installer | Assistant rules |
 
 ## Use
 
-Ask your agent to analyze your codebase. The phrasing doesn't matter much — all agents understand the intent:
+Ask your agent to analyze your codebase. The phrasing doesn't matter much:
 
 ```
 Analyze this codebase for complexity hotspots and give me a report.
@@ -53,10 +70,6 @@ Analyze this codebase for complexity hotspots and give me a report.
 
 ```
 Scan this repo for performance issues — nested loops, N+1 queries, O(n^2) patterns.
-```
-
-```
-Find the worst algorithmic complexity in this project and suggest fixes.
 ```
 
 For Codex specifically:
@@ -76,8 +89,8 @@ Implement the lowest-risk optimization from the report and run the tests.
 The Python scanner works independently of any agent:
 
 ```bash
-python3 core/scripts/analyze_complexity.py /path/to/repo --format markdown
-python3 core/scripts/analyze_complexity.py /path/to/repo --format json
+python3 skills/complexity-optimizer/scripts/analyze_complexity.py /path/to/repo --format markdown
+python3 skills/complexity-optimizer/scripts/analyze_complexity.py /path/to/repo --format json
 ```
 
 Supports: Python, JavaScript, TypeScript, JSX/TSX, Java, Go, C, C++, C#, Ruby, PHP, Swift, Rust, Kotlin, Scala, Lua, Zig, Elixir, Erlang, Dart, R, Julia, OCaml, Clojure, and more.
@@ -95,10 +108,10 @@ Supports: Python, JavaScript, TypeScript, JSX/TSX, Java, Go, C, C++, C#, Ruby, P
 
 If the auto-installer doesn't detect your agent, copy files manually:
 
-1. Copy `core/scripts/analyze_complexity.py` to your agent's config directory
+1. Copy `skills/complexity-optimizer/scripts/analyze_complexity.py` to your agent's config directory
 2. Copy the matching instruction file from `agents/<agent-name>/`
 3. Follow your agent's docs for loading custom rules/instructions
 
 ## License
 
-MIT. See [CREDITS.md](CREDITS.md) for attribution.
+MIT. See [CREDITS.md](CREDITS.md) for attribution to the original project.
