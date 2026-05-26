@@ -1,0 +1,51 @@
+{
+  "name": "agent-complexity-optimizer",
+  "version": "1.0.0",
+  "description": "Universal complexity optimizer for all AI coding agents — Claude Code, Codex, Cursor, Windsurf, Copilot, Gemini CLI, Cline, Aider, OpenCode, Continue.dev, Amazon Q, Zed AI.",
+  "license": "MIT",
+  "type": "commonjs",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/seba-brg/agent-complexity-optimizer.git"
+  },
+  "bugs": {
+    "url": "https://github.com/seba-brg/agent-complexity-optimizer/issues"
+  },
+  "homepage": "https://github.com/seba-brg/agent-complexity-optimizer#readme",
+  "bin": {
+    "agent-complexity-optimizer": "scripts/install.js"
+  },
+  "scripts": {
+    "install-skill": "node scripts/install.js",
+    "postinstall": "node scripts/install.js --silent"
+  },
+  "files": [
+    "core",
+    "agents",
+    "scripts/install.js",
+    "README.md",
+    "CREDITS.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "complexity",
+    "performance",
+    "optimization",
+    "static-analysis",
+    "codex",
+    "codex-skill",
+    "claude-code",
+    "cursor",
+    "windsurf",
+    "copilot",
+    "gemini",
+    "cline",
+    "aider",
+    "opencode",
+    "ai-agent",
+    "code-quality"
+  ],
+  "engines": {
+    "node": ">=16"
+  }
+}

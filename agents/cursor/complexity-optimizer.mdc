@@ -1,0 +1,54 @@
+---
+description: Analyze codebase for algorithmic complexity hotspots and propose safe optimizations. Use when asked to find inefficient loops, N+1 queries, O(n^2) patterns, or reduce complexity.
+globs:
+alwaysApply: false
+---
+
+# Complexity Optimizer
+
+## Core Rule
+
+Optimize only when current behavior is understood and can be preserved. Small proven improvement with tests > broad rewrite with unclear correctness.
+
+## When Triggered
+
+Analyze, scan, audit, review, or report on codebase complexity. Produce full report automatically:
+
+- Scope analyzed, stack/test commands detected
+- Top findings ranked by impact
+- File:line, current pattern, why costly
+- Current complexity estimate → recommended change → new complexity estimate
+- Risk level, tests/benchmarks needed
+- "No files modified" unless implementation explicitly requested
+
+## Scanner
+
+Run first-pass analysis:
+```bash
+python3 ~/.cursor/rules/complexity-optimizer/analyze_complexity.py . --format markdown
+```
+
+Scanner output = leads, not proof. Always inspect surrounding code for context.
+
+## Workflow
+
+1. **Baseline**: Language, framework, test/build commands, hot paths. Read existing tests first.
+2. **Rank**: Hot paths > cold paths. Algorithmic complexity > constant factors.
+3. **Prove**: Tests for the target function. Edge cases: empty, duplicates, ordering, nulls, errors, pagination.
+4. **Optimize**: Maps/sets for lookups. Indexing/grouping for nested scans. Memoization for renders. Bulk fetch for N+1.
+5. **Verify**: Tests + lint/build. Benchmark if non-obvious. Report before/after.
+
+## Safety
+
+Before: data sizes matter? ordering preserved? identity/mutability safe? caches invalidated? dedup correct? auth/tenant preserved?
+
+After: narrow test → broad suite → benchmark comparison → localized patch.
+
+## Common Transforms
+
+- Nested lookup → map index: O(a*b) → O(a+b)
+- Membership in loop → Set: O(n*m) → O(n+m)
+- Sort in loop → sort once / heap: O(n^2 log n) → O(n log n)
+- Pairwise → sort+two-pointer: O(n^2) → O(n log n)
+- Render recompute → memoized selectors
+- N+1 → bulk fetch / joins / dataloaders

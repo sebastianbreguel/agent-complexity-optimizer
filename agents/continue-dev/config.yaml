@@ -1,0 +1,26 @@
+# Continue.dev Complexity Optimizer
+# Add to .continue/config.yaml in your project or ~/.continue/config.yaml globally
+
+customCommands:
+  - name: complexity-report
+    description: Analyze codebase for algorithmic complexity hotspots
+    prompt: |
+      Analyze this codebase for algorithmic complexity and performance hotspots.
+
+      Run the scanner first:
+      ```bash
+      python3 ~/.continue/complexity-optimizer/analyze_complexity.py . --format markdown
+      ```
+
+      Then produce a report with:
+      - Scope analyzed, stack/test commands detected
+      - Top findings ranked by impact
+      - File:line, current pattern, why costly
+      - Current complexity → recommended change → new complexity
+      - Risk level, tests/benchmarks needed
+
+      Follow these rules:
+      - Only edit files if I explicitly ask to implement/fix/optimize
+      - Prefer maps/sets for lookups, indexing for nested scans, memoization for renders, bulk fetch for N+1
+      - Verify: tests + lint/build, benchmark if non-obvious
+      - Safety: preserve ordering, identity, auth/tenant constraints

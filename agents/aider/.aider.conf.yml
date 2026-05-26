@@ -1,0 +1,5 @@
+# Complexity Optimizer - Aider convention file
+# Place in project root or ~/.aider.conf.yml
+
+read:
+  - .aider/complexity-optimizer/CONVENTIONS.md
