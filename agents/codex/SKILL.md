@@ -51,11 +51,24 @@ Only edit files when the user asks to implement, fix, optimize, apply, change, r
    - Replace nested scans with indexing, grouping, two-pointer scans, sweep-line logic, binary search, memoization, batching, or precomputation only when the data shape supports it.
    - In UI code, reduce unnecessary renders with stable props, memoized derived data, virtualization, debounced work, and moving expensive work out of render paths.
    - In data access code, remove N+1 behavior with bulk fetches, joins, preloading, caching, or batching while preserving authorization and filtering.
+   - Before applying changes, snapshot the original function for benchmark comparison in Step 6.
 
 5. Verify:
    - Run relevant tests and type/lint/build commands.
    - Add a micro-benchmark or measurement when the complexity improvement is non-obvious or performance-critical.
    - Report the original complexity, new complexity, changed files, tests run, and any residual risk.
+
+6. Benchmark (post-implementation only):
+   - Skip if the user only requested analysis/report.
+   - Generate temporary benchmark script (`/tmp/bench_<name>.<ext>`) measuring original vs optimized.
+   - Data: project fixtures first (`tests/`, `fixtures/`, `__tests__/`, `test_data/`), synthetic fallback (1,000+ elements).
+   - Python: `timeit.repeat()` min of 5×1000 for speed, `tracemalloc` peak for RAM.
+   - JS/TS: `performance.now()` avg of 1000 for speed, `process.memoryUsage().heapUsed` delta for RAM.
+   - Delete temp scripts after capture. If benchmark fails, report reason and fall back to theoretical estimates.
+
+7. Performance report:
+   - Add `## Performance Benchmark` section with table: Function | Metric | Before | After | Delta | Change%.
+   - Auto-scale units (μs/ms/s, KB/MB/GB). Include data source, iterations, runtime version, and dev-machine disclaimer.
 
 ## First-Pass Scanner
 

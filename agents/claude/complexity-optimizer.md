@@ -44,8 +44,19 @@ Only edit files when asked to implement, fix, optimize, apply, change, or refact
    - Nested scans → indexing, grouping, two-pointer, sweep-line, binary search, memoization, batching.
    - UI: reduce re-renders with stable props, memoized derived data, virtualization.
    - Data access: remove N+1 with bulk fetches, joins, preloading, caching, batching.
+   - Before applying changes, snapshot the original function for benchmark comparison in Step 6.
 
 5. **Verify**: Run tests + type/lint/build. Add micro-benchmarks when improvement is non-obvious. Report original vs new complexity, changed files, tests run, residual risk.
+
+6. **Benchmark** (post-implementation only):
+   - Skip if user only requested analysis/report.
+   - Generate temporary benchmark script (`/tmp/bench_<name>.<ext>`) measuring original vs optimized.
+   - Data: project fixtures first (`tests/`, `fixtures/`, `__tests__/`, `test_data/`), synthetic fallback (1,000+ elements).
+   - Python: `timeit.repeat()` min of 5×1000 for speed, `tracemalloc` peak for RAM.
+   - JS/TS: `performance.now()` avg of 1000 for speed, `process.memoryUsage().heapUsed` delta for RAM.
+   - Delete temp scripts after capture. If benchmark fails, report reason and fall back to theoretical estimates.
+
+7. **Performance report**: Add `## Performance Benchmark` section with table: Function | Metric | Before | After | Delta | Change%. Auto-scale units (μs/ms/s, KB/MB/GB). Include data source, iterations, runtime version, and dev-machine disclaimer.
 
 ## Safety Checklist
 

@@ -37,6 +37,8 @@ Scanner output = leads, not proof. Always inspect surrounding code for context.
 3. **Prove**: Tests for the target function. Edge cases: empty, duplicates, ordering, nulls, errors, pagination.
 4. **Optimize**: Maps/sets for lookups. Indexing/grouping for nested scans. Memoization for renders. Bulk fetch for N+1.
 5. **Verify**: Tests + lint/build. Benchmark if non-obvious. Report before/after.
+6. **Benchmark** (post-implementation only): generate temp script measuring original vs optimized. Python: timeit + tracemalloc. JS/TS: performance.now + process.memoryUsage. Use project fixtures first, synthetic fallback. Delete temp scripts after. Skip with reason if env restricted.
+7. **Performance report**: add `## Performance Benchmark` table (Function | Metric | Before | After | Delta | Change%). Auto-scale units. Include data source, iterations, runtime, dev-machine disclaimer.
 
 ## Safety
 

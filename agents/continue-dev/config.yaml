@@ -24,3 +24,10 @@ customCommands:
       - Prefer maps/sets for lookups, indexing for nested scans, memoization for renders, bulk fetch for N+1
       - Verify: tests + lint/build, benchmark if non-obvious
       - Safety: preserve ordering, identity, auth/tenant constraints
+
+      After implementing optimizations, benchmark the changes:
+      - Generate a temp script measuring original vs optimized function (timeit+tracemalloc for Python, performance.now+process.memoryUsage for JS/TS)
+      - Use project fixtures first, synthetic data as fallback
+      - Report results in a Performance Benchmark table: Function | Metric | Before | After | Delta | Change%
+      - Auto-scale units (μs/ms/s, KB/MB/GB), include data source and dev-machine disclaimer
+      - Skip with reason if environment is restricted

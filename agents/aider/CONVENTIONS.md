@@ -31,6 +31,8 @@ Produce automatically when asked for analysis:
 3. Prove: tests for target function. Edge cases: empty, duplicates, ordering, nulls, errors, pagination.
 4. Optimize: maps/sets for lookups, indexing for nested scans, memoization for renders, bulk fetch for N+1.
 5. Verify: tests + lint/build, benchmark if non-obvious, report before/after.
+6. Benchmark (post-implementation only): generate temp script measuring original vs optimized. Python: timeit + tracemalloc. JS/TS: performance.now + process.memoryUsage. Use project fixtures first, synthetic fallback. Delete temp scripts after. Skip with reason if env restricted.
+7. Performance report: add `## Performance Benchmark` table (Function | Metric | Before | After | Delta | Change%). Auto-scale units. Include data source, iterations, runtime, dev-machine disclaimer.
 
 ## Safety
 

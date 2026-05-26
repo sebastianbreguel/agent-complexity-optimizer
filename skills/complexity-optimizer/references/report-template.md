@@ -37,3 +37,22 @@ For each finding:
 - Build/type/lint run:
 - Benchmark or measurement:
 - Residual risk:
+
+## Performance Benchmark
+
+> Only included when optimizations were implemented and benchmarks ran successfully.
+
+For each optimized function:
+
+| Function | Metric | Before | After | Delta | Change |
+|----------|--------|--------|-------|-------|--------|
+| `function_name` | Speed | | | | % |
+| `function_name` | RAM | | | | % |
+
+- Data source:
+- Iterations:
+- Environment:
+
+> Note: benchmarks ran on the development machine. Production numbers may differ based on hardware, load, and data volume.
+
+If benchmark was skipped: "Benchmark skipped: [reason]. See theoretical complexity estimates in Findings above."
