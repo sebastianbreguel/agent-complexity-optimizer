@@ -1,0 +1,102 @@
+"""Tests for analyze_complexity.py scanner."""
+
+from __future__ import annotations
+
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+SCANNER = Path(__file__).resolve().parent.parent / "skills" / "complexity-optimizer" / "scripts" / "analyze_complexity.py"
+FIXTURES = Path(__file__).resolve().parent / "fixtures"
+
+
+def run_scanner(fixture_dir: str | Path, fmt: str = "json") -> list[dict]:
+    result = subprocess.run(
+        [sys.executable, str(SCANNER), str(fixture_dir), "--format", fmt],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, f"Scanner failed: {result.stderr}"
+    if fmt == "json":
+        return json.loads(result.stdout)
+    return result.stdout
+
+
+def run_scanner_on_file(filename: str, fmt: str = "json"):
+    fixture = FIXTURES / filename
+    assert fixture.exists(), f"Fixture not found: {fixture}"
+    return run_scanner(FIXTURES, fmt)
+
+
+def findings_for_file(filename: str) -> list[dict]:
+    all_findings = run_scanner(FIXTURES)
+    return [f for f in all_findings if f["path"].endswith(filename)]
+
+
+class TestNestedLoops:
+    def test_detects_python_nested_loop(self):
+        findings = findings_for_file("nested_loops.py")
+        kinds = {f["kind"] for f in findings}
+        assert "nested-loop" in kinds or "nested-or-callback-loop" in kinds
+
+    def test_detects_js_nested_loop(self):
+        findings = findings_for_file("nested_loops.js")
+        kinds = {f["kind"] for f in findings}
+        assert "nested-loop" in kinds or "nested-or-callback-loop" in kinds
+
+
+class TestNPlusOne:
+    def test_detects_query_in_loop(self):
+        findings = findings_for_file("n_plus_one.py")
+        kinds = {f["kind"] for f in findings}
+        assert "io-or-query-in-loop" in kinds or "n+1-query" in kinds
+
+
+class TestMembershipInLoop:
+    def test_detects_membership_check(self):
+        findings = findings_for_file("membership_in_loop.py")
+        kinds = {f["kind"] for f in findings}
+        assert "membership-in-loop" in kinds
+
+
+class TestSortInLoop:
+    def test_detects_sort_in_loop(self):
+        findings = findings_for_file("sort_in_loop.py")
+        kinds = {f["kind"] for f in findings}
+        assert "sort-in-loop" in kinds
+
+
+class TestRenderPath:
+    def test_detects_render_derived_work(self):
+        findings = findings_for_file("render_path.tsx")
+        kinds = {f["kind"] for f in findings}
+        assert "render-derived-work" in kinds
+
+
+class TestCleanCode:
+    def test_no_false_positives(self):
+        findings = findings_for_file("clean_code.py")
+        assert len(findings) == 0, f"False positives: {findings}"
+
+
+class TestOutputFormats:
+    def test_json_is_valid(self):
+        output = run_scanner(FIXTURES, fmt="json")
+        assert isinstance(output, list)
+        assert len(output) > 0
+
+    def test_markdown_has_headers(self):
+        output = run_scanner(FIXTURES, fmt="markdown")
+        assert "# Complexity Hotspots" in output
+        assert "## HIGH" in output or "## MEDIUM" in output
+
+    def test_finding_structure(self):
+        findings = run_scanner(FIXTURES, fmt="json")
+        for f in findings:
+            assert "path" in f
+            assert "line" in f
+            assert "severity" in f
+            assert "kind" in f
+            assert "message" in f
+            assert "suggestion" in f
