@@ -1,10 +1,67 @@
 # agent-complexity-optimizer
 
-Universal complexity optimizer for AI coding agents. Scans your codebase for algorithmic complexity hotspots (nested loops, N+1 queries, O(n^2) patterns) and produces safe optimization reports.
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![npm](https://img.shields.io/npm/v/agent-complexity-optimizer)](https://www.npmjs.com/package/agent-complexity-optimizer)
+[![Agents](https://img.shields.io/badge/agents-13+-green)](#supported-agents)
+[![CI](https://github.com/sebastianbreguel/agent-complexity-optimizer/actions/workflows/ci.yml/badge.svg)](https://github.com/sebastianbreguel/agent-complexity-optimizer/actions)
 
-Works with **every major AI coding agent**: Claude Code, Codex, Pi, Cursor, Windsurf, GitHub Copilot, Gemini CLI, Cline/Roo Code, Aider, OpenCode, Continue.dev, Amazon Q Developer, and Zed AI.
+Scan any codebase for O(n^2) hotspots, N+1 queries, and algorithmic complexity issues. Get a structured report with severity, location, and fix suggestions — without modifying a single file.
 
-Based on [codex-complexity-optimizer](https://github.com/Kappaemme-git/codex-complexity-optimizer) by [Kappaemme](https://github.com/Kappaemme-git). See [CREDITS.md](CREDITS.md) for full attribution.
+Works as a skill/plugin for **13 AI coding agents**, or standalone via Python CLI.
+
+> Extended from [codex-complexity-optimizer](https://github.com/Kappaemme-git/codex-complexity-optimizer) by [Kappaemme](https://github.com/Kappaemme-git). See [CREDITS.md](CREDITS.md) for full attribution and a breakdown of what this project adds.
+
+## Demo
+
+Given this code:
+
+```python
+def find_duplicates(users, transactions):
+    duplicates = []
+    for t in transactions:
+        for u in users:                          # O(n*m) nested scan
+            if u["id"] == t["user_id"]:
+                duplicates.append(t)
+    return duplicates
+
+def get_user_orders(user_ids, db):
+    results = []
+    for uid in user_ids:
+        order = db.query(f"SELECT * FROM orders WHERE user_id = {uid}")  # N+1
+        results.append(order)
+    return results
+```
+
+The scanner produces:
+
+```
+# Complexity Hotspots
+
+## HIGH nested-loop
+- Location: `example.py:4`
+- Finding: Nested loop may create O(n^2) or worse behavior.
+- Suggestion: Check whether a map/set index, sort+two-pointer pass,
+  grouping, or batching can replace the inner scan.
+
+## HIGH io-or-query-in-loop
+- Location: `example.py:12`
+- Finding: Potential database/API/file operation inside a loop.
+- Suggestion: Look for N+1 behavior; batch or preload while preserving
+  auth, filters, ordering, and error handling.
+```
+
+## What It Detects
+
+| Pattern | Severity | Example |
+|---------|----------|---------|
+| Nested loops | High | `for x in A: for y in B` — O(n*m) |
+| N+1 queries | High | `db.query()` / `fetch()` inside a loop |
+| Sorting inside loops | High | `.sort()` called per iteration |
+| Membership checks in loops | Medium | `.includes()`, `in`, `indexOf()` inside iteration |
+| Render-path recomputation | Medium | `.filter().map()` in React component body |
+| Pairwise comparisons | High | Every-pair scan that could be sort+sweep |
+
+Supports: Python (AST-based), JavaScript, TypeScript, JSX/TSX, Java, Go, C, C++, C#, Ruby, PHP, Swift, Rust, Kotlin, Scala, Lua, Zig, Elixir, Erlang, Dart, R, Julia, OCaml, Clojure, and more (regex-based).
 
 ## Install
 
@@ -15,24 +72,10 @@ Based on [codex-complexity-optimizer](https://github.com/Kappaemme-git/codex-com
 /plugin install complexity-optimizer@complexity-optimizer
 ```
 
-Or via `npx skills add`:
-
-```bash
-npx skills add sebastianbreguel/agent-complexity-optimizer -a claude-code -g -y
-```
-
 ### Codex
 
 ```bash
 npx skills add sebastianbreguel/agent-complexity-optimizer -a codex -g -y
-```
-
-### Pi
-
-Pi loads skills from npm packages with `pi.skills` metadata:
-
-```bash
-npm install -g agent-complexity-optimizer
 ```
 
 ### All other agents (auto-detect)
@@ -41,84 +84,60 @@ npm install -g agent-complexity-optimizer
 npx agent-complexity-optimizer
 ```
 
-The fallback installer auto-detects which agents you have (Cursor, Windsurf, Copilot, Gemini CLI, Cline/Roo, Aider, OpenCode, Continue.dev, Amazon Q, Zed AI) and installs the right format for each.
+Auto-detects installed agents (Cursor, Windsurf, Copilot, Gemini CLI, Cline/Roo, Aider, OpenCode, Continue.dev, Amazon Q, Zed AI) and writes the correct config format for each. Preview with `--dry-run`.
 
-Use `--dry-run` to preview:
-
-```bash
-npx agent-complexity-optimizer --dry-run
-```
-
-## Supported Agents
-
-| Agent | Install method | Config format |
-|-------|---------------|--------------|
-| Claude Code | `npx skills add` | SKILL.md (slash command) |
-| Codex (OpenAI) | `npx skills add` | SKILL.md + openai.yaml |
-| Pi | npm install (pi.skills) | SKILL.md |
-| Cursor | auto-detect installer | `.mdc` rule |
-| Windsurf (Codeium) | auto-detect installer | `.windsurfrules` |
-| GitHub Copilot | auto-detect installer | `copilot-instructions.md` |
-| Gemini CLI | auto-detect installer | `GEMINI.md` |
-| Cline / Roo Code | auto-detect installer | `.clinerules` |
-| Aider | auto-detect installer | `CONVENTIONS.md` |
-| OpenCode | auto-detect installer | `AGENTS.md` |
-| Continue.dev | auto-detect installer | Custom command YAML |
-| Amazon Q Developer | auto-detect installer | Rules `.md` |
-| Zed AI | auto-detect installer | Assistant rules |
-
-## Use
-
-Ask your agent to analyze your codebase. The phrasing doesn't matter much:
-
-```
-Analyze this codebase for complexity hotspots and give me a report.
-```
-
-```
-Scan this repo for performance issues — nested loops, N+1 queries, O(n^2) patterns.
-```
-
-For Codex specifically:
-
-```
-Use $complexity-optimizer to analyze this codebase and give me a full complexity report.
-```
-
-By default, reports don't modify files. To apply a fix:
-
-```
-Implement the lowest-risk optimization from the report and run the tests.
-```
-
-## Standalone Scanner
-
-The Python scanner works independently of any agent:
+### Standalone (no agent needed)
 
 ```bash
 python3 skills/complexity-optimizer/scripts/analyze_complexity.py /path/to/repo --format markdown
 python3 skills/complexity-optimizer/scripts/analyze_complexity.py /path/to/repo --format json
 ```
 
-Supports: Python, JavaScript, TypeScript, JSX/TSX, Java, Go, C, C++, C#, Ruby, PHP, Swift, Rust, Kotlin, Scala, Lua, Zig, Elixir, Erlang, Dart, R, Julia, OCaml, Clojure, and more.
+## Supported Agents
 
-## What It Detects
+| Agent | Install | Config format |
+|-------|---------|---------------|
+| Claude Code | marketplace / `npx skills add` | SKILL.md |
+| Codex (OpenAI) | `npx skills add` | SKILL.md + openai.yaml |
+| Pi | `npm install -g` | SKILL.md (pi.skills) |
+| Cursor | auto-detect | `.mdc` rule |
+| Windsurf | auto-detect | `.windsurfrules` |
+| GitHub Copilot | auto-detect | `copilot-instructions.md` |
+| Gemini CLI | auto-detect | `GEMINI.md` |
+| Cline / Roo Code | auto-detect | `.clinerules` |
+| Aider | auto-detect | `CONVENTIONS.md` |
+| OpenCode | auto-detect | `AGENTS.md` |
+| Continue.dev | auto-detect | Custom command YAML |
+| Amazon Q | auto-detect | Rules `.md` |
+| Zed AI | auto-detect | Assistant rules |
 
-- **Nested loops** — O(n^2) or worse from scanning B for each item in A
-- **Membership checks in loops** — `includes()`, `indexOf()`, `in` inside iteration
-- **Sorting inside loops** — repeated O(n log n) work
-- **N+1 queries** — database/API calls inside loops
-- **Render-path recomputation** — expensive transforms in UI component render paths
-- **Pairwise comparisons** — every-pair scans that could be sort+sweep
+## Usage
 
-## Manual Install
+Ask your agent naturally:
 
-If the auto-installer doesn't detect your agent, copy files manually:
+```
+Analyze this codebase for complexity hotspots and give me a report.
+```
 
-1. Copy `skills/complexity-optimizer/scripts/analyze_complexity.py` to your agent's config directory
-2. Copy the matching instruction file from `agents/<agent-name>/`
-3. Follow your agent's docs for loading custom rules/instructions
+```
+Scan for performance issues — nested loops, N+1 queries, O(n^2) patterns.
+```
+
+Reports are read-only by default. To apply a fix:
+
+```
+Implement the lowest-risk optimization from the report and run the tests.
+```
+
+## What This Project Adds
+
+The [original project](https://github.com/Kappaemme-git/codex-complexity-optimizer) supported Codex only. This fork extends it to 13 agents and adds:
+
+- **Universal installer** — auto-detects agents and writes native config formats
+- **Claude Code marketplace** — first-class plugin support
+- **Extended scanner** — additional languages (Rust, Kotlin, Scala, Lua, Zig, Elixir, Erlang, Dart, R, Julia, OCaml, Clojure) and patterns (list comprehensions, generator expressions, more query signatures)
+- **Structured reports** — with severity ranking, benchmark sections, and safety checklists
 
 ## License
 
-MIT. See [CREDITS.md](CREDITS.md) for attribution to the original project.
+MIT
