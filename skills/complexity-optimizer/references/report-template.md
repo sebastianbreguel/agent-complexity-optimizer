@@ -13,16 +13,23 @@ Use this structure by default when asked for a complexity analysis, audit, scan,
 
 ## Findings
 
-For each finding:
+Always render findings as a table with these exact columns, in this order. Never drop a column; use `—` when a value is unknown.
 
-- Location:
-- Current pattern:
-- Estimated current complexity:
-- Recommended change:
-- Estimated complexity after:
-- Why behavior should remain equivalent:
-- Risk level:
-- Tests or measurements needed:
+| # | Location | Current pattern | Current (Cost) | Future | Impact | Risk | Recommended change |
+|---|----------|-----------------|----------------|--------|--------|------|--------------------|
+| 1 | `file.py:120` | nested mask-max per group | O(N²) | O(N) | High | Low | replace with a single groupby |
+
+Column meaning:
+
+- **Location**: `file:line`.
+- **Current pattern**: the existing construct (e.g. nested scan, repeated lookup, N+1 query).
+- **Current (Cost)**: estimated complexity of the existing code.
+- **Future**: estimated complexity after the recommended change.
+- **Impact**: expected payoff (High / Medium / Low), given hot path and input size.
+- **Risk**: chance of changing observable behavior (High / Medium / Low).
+- **Recommended change**: the concrete transformation.
+
+After the table, for each finding add a short note covering why the pattern is costly, why behavior should remain equivalent, and the tests or measurements needed.
 
 ## Changes Made
 

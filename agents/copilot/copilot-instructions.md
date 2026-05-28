@@ -21,9 +21,8 @@ Produce automatically when asked for analysis:
 
 - Scope analyzed, stack/test commands detected
 - Top findings ranked by impact
-- File:line, current pattern, why costly
-- Current complexity → recommended change → new complexity
-- Risk level, tests/benchmarks needed
+- Findings as a table, mandatory columns (never drop one): Location | Current pattern | Current (Cost) | Future | Impact | Risk | Recommended change
+- Tests/benchmarks needed
 - "No files modified" unless implementation requested
 
 ## Workflow

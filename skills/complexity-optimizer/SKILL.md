@@ -18,11 +18,7 @@ Default report contents:
 - Scope analyzed and detected stack/test commands.
 - Top findings ranked by likely impact.
 - File and line for each finding.
-- Current pattern and why it may be costly.
-- Estimated current complexity.
-- Recommended change.
-- Estimated complexity after the change.
-- Risk level.
+- Findings rendered as a table with these mandatory columns, never dropped: Location | Current pattern | Current (Cost) | Future | Impact | Risk | Recommended change. See `references/report-template.md` for column meanings.
 - Tests, benchmarks, or manual checks needed.
 - Clear statement that no files were modified, unless the user explicitly requested implementation.
 

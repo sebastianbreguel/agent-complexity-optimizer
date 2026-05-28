@@ -16,9 +16,8 @@ Analyze, scan, audit, review, or report on codebase complexity. Produce full rep
 
 - Scope analyzed, stack/test commands detected
 - Top findings ranked by impact
-- File:line, current pattern, why costly
-- Current complexity estimate → recommended change → new complexity estimate
-- Risk level, tests/benchmarks needed
+- Findings as a table, mandatory columns (never drop one): Location | Current pattern | Current (Cost) | Future | Impact | Risk | Recommended change
+- Tests/benchmarks needed
 - "No files modified" unless implementation explicitly requested
 
 ## Scanner

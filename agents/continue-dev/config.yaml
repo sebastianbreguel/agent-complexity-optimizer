@@ -15,9 +15,8 @@ customCommands:
       Then produce a report with:
       - Scope analyzed, stack/test commands detected
       - Top findings ranked by impact
-      - File:line, current pattern, why costly
-      - Current complexity → recommended change → new complexity
-      - Risk level, tests/benchmarks needed
+      - Findings as a table, mandatory columns (never drop one): Location | Current pattern | Current (Cost) | Future | Impact | Risk | Recommended change
+      - Tests/benchmarks needed
 
       Follow these rules:
       - Only edit files if I explicitly ask to implement/fix/optimize
