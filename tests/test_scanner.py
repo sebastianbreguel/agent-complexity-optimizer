@@ -100,3 +100,16 @@ class TestOutputFormats:
             assert "kind" in f
             assert "message" in f
             assert "suggestion" in f
+            assert "confidence" in f
+
+
+class TestConfidence:
+    def test_python_ast_findings_are_high_confidence(self):
+        findings = findings_for_file("nested_loops.py")
+        assert findings, "expected at least one Python finding"
+        assert all(f["confidence"] == "high" for f in findings)
+
+    def test_regex_findings_are_low_confidence(self):
+        findings = findings_for_file("nested_loops.js")
+        assert findings, "expected at least one JS finding"
+        assert all(f["confidence"] == "low" for f in findings)

@@ -99,6 +99,7 @@ class Finding:
     kind: str
     message: str
     suggestion: str
+    confidence: str = "low"
 
 
 def iter_files(root: Path, excludes: set[str]) -> Iterable[Path]:
@@ -138,7 +139,15 @@ class PythonVisitor(ast.NodeVisitor):
 
     def add(self, node: ast.AST, severity: str, kind: str, message: str, suggestion: str) -> None:
         self.findings.append(
-            Finding(rel(self.path, self.root), getattr(node, "lineno", 1), severity, kind, message, suggestion)
+            Finding(
+                rel(self.path, self.root),
+                getattr(node, "lineno", 1),
+                severity,
+                kind,
+                message,
+                suggestion,
+                confidence="high",
+            )
         )
 
     def visit_For(self, node: ast.For) -> None:
@@ -376,6 +385,7 @@ def render_markdown(findings: list[Finding]) -> str:
             [
                 f"## {finding.severity.upper()} {finding.kind}",
                 f"- Location: `{finding.path}:{finding.line}`",
+                f"- Confidence: {finding.confidence}",
                 f"- Finding: {finding.message}",
                 f"- Suggestion: {finding.suggestion}",
                 "",
