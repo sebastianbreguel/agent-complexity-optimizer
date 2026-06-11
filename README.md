@@ -84,7 +84,9 @@ npx skills add sebastianbreguel/agent-complexity-optimizer -a codex -g -y
 npx agent-complexity-optimizer
 ```
 
-Auto-detects installed agents (Cursor, Windsurf, Copilot, Gemini CLI, Cline/Roo, Aider, OpenCode, Continue.dev, Amazon Q, Zed AI) and writes the correct config format for each. Preview with `--dry-run`.
+Auto-detects installed agents (Cursor, Windsurf, Gemini CLI, Cline/Roo, Aider, OpenCode, Continue.dev, Amazon Q, Zed AI) and writes the correct config format for each. Preview with `--dry-run`.
+
+**GitHub Copilot** reads instructions per-repository, so the installer can't set it up globally — copy [`agents/copilot/copilot-instructions.md`](agents/copilot/copilot-instructions.md) into your repo's `.github/` directory instead.
 
 ### Standalone (no agent needed)
 
@@ -102,7 +104,7 @@ python3 skills/complexity-optimizer/scripts/analyze_complexity.py /path/to/repo 
 | Pi | `npm install -g` | SKILL.md (pi.skills) |
 | Cursor | auto-detect | `.mdc` rule |
 | Windsurf | auto-detect | `.windsurfrules` |
-| GitHub Copilot | auto-detect | `copilot-instructions.md` |
+| GitHub Copilot | manual (per-repo `.github/`) | `copilot-instructions.md` |
 | Gemini CLI | auto-detect | `GEMINI.md` |
 | Cline / Roo Code | auto-detect | `.clinerules` |
 | Aider | auto-detect | `CONVENTIONS.md` |
@@ -136,6 +138,7 @@ The [original project](https://github.com/Kappaemme-git/codex-complexity-optimiz
 - **Universal installer** — auto-detects agents and writes native config formats
 - **Claude Code marketplace** — first-class plugin support
 - **Extended scanner** — additional languages (Rust, Kotlin, Scala, Lua, Zig, Elixir, Erlang, Dart, R, Julia, OCaml, Clojure) and patterns (list comprehensions, generator expressions, more query signatures)
+- **Fewer false positives** — membership checks against sets/dicts are skipped (Python AST tracks what was built as a set), and generic verbs like `.get()`/`.find()` only count as potential N+1 when called on a client-like receiver (`db`, `session`, `client`, `requests`, ...)
 - **Structured reports** — with severity ranking, benchmark sections, and safety checklists
 
 ## License
