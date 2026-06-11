@@ -10,7 +10,7 @@
     {
       "name": "complexity-optimizer",
       "description": "Analyze a codebase for algorithmic complexity hotspots and produce safe optimization reports. Finds nested loops, N+1 queries, sorts inside loops, .includes() instead of Set, and expensive render-path transforms. Report only by default — no files touched unless you ask.",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "category": "development",
       "source": "./skills/complexity-optimizer",
       "homepage": "https://github.com/sebastianbreguel/agent-complexity-optimizer",

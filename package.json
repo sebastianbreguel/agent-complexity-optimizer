@@ -1,6 +1,6 @@
 {
   "name": "agent-complexity-optimizer",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Universal complexity optimizer for all AI coding agents — Claude Code, Codex, Pi, Cursor, Windsurf, Copilot, Gemini CLI, Cline, Aider, OpenCode, and more.",
   "license": "MIT",
   "type": "commonjs",
