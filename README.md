@@ -86,7 +86,13 @@ npx agent-complexity-optimizer
 
 Auto-detects installed agents (Cursor, Windsurf, Gemini CLI, Cline/Roo, Aider, OpenCode, Continue.dev, Amazon Q, Zed AI) and writes the correct config format for each. Preview with `--dry-run`.
 
-**GitHub Copilot** reads instructions per-repository, so the installer can't set it up globally — copy [`agents/copilot/copilot-instructions.md`](agents/copilot/copilot-instructions.md) into your repo's `.github/` directory instead.
+**GitHub Copilot** reads instructions per-repository, so the installer can't set it up globally. Copy these into the repo you want to scan:
+
+```bash
+cp agents/copilot/copilot-instructions.md <your-repo>/.github/
+mkdir -p <your-repo>/.github/complexity-optimizer
+cp skills/complexity-optimizer/scripts/analyze_complexity.py <your-repo>/.github/complexity-optimizer/
+```
 
 ### Standalone (no agent needed)
 

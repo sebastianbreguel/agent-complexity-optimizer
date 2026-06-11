@@ -127,7 +127,8 @@ const AGENTS = [
     // not from the home directory — a global install cannot reach it.
     manual:
       "Copilot reads instructions per-repository. Copy agents/copilot/copilot-instructions.md " +
-      "into your repo's .github/ directory.",
+      "into your repo's .github/ directory, and skills/complexity-optimizer/scripts/analyze_complexity.py " +
+      "into .github/complexity-optimizer/.",
   },
   {
     name: "Gemini CLI",
