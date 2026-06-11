@@ -82,8 +82,11 @@ MEMBERSHIP_RE = re.compile(
     r"(\.includes\s*\(|\.indexOf\s*\(|\.find\s*\(|\.findIndex\s*\(|\bin_array\s*\(|\bcontains\s*\(|\.include\?\s*\(|\.contains\s*\(|\.has\s*\()"
 )
 SORT_RE = re.compile(r"(\.sort\s*\(|\bsorted\s*\(|\bsort\s*\(|\.sort_by\s*[\({]|\.order\s*\()")
+# Strong signals match on the method name alone; generic verbs (get, post, find, ...)
+# only count when called on a client-looking receiver, so Map.get()/Array.find() stay quiet.
 QUERY_IN_LOOP_RE = re.compile(
-    r"\b(fetch|axios\.|request\s*\(|query\s*\(|execute\s*\(|findMany\s*\(|findOne\s*\(|findUnique\s*\(|select\s*\(|where\s*\(|\.get\s*\(|\.post\s*\(|\.put\s*\(|\.delete\s*\(|\.all\s*$|\.first\s*$|\.last\s*$|\.find_by\s*\()\b",
+    r"(\bfetch\s*\(|\baxios\.|\brequest\s*\(|\bquery\s*\(|\bexecute\s*\(|\.findMany\s*\(|\.findOne\s*\(|\.findUnique\s*\(|\.find_by\s*\("
+    r"|\b(?:db|database|client|session|conn|connection|api|http|repo|repository|knex|prisma|supabase|requests)\.\w+\s*\()",
     re.IGNORECASE,
 )
 RENDER_HINT_RE = re.compile(
@@ -130,12 +133,40 @@ def rel(path: Path, root: Path) -> str:
         return str(path)
 
 
+# Method names that are query-like on their own vs. only when called on a client-looking object.
+STRONG_QUERY_NAMES = {"fetch", "query", "execute", "find_one", "find_many", "find_unique", "find_by", "findone", "findmany", "findunique"}
+GENERIC_QUERY_NAMES = {"find", "select", "where", "get", "post", "put", "delete", "request", "all", "first", "last"}
+CLIENT_RECEIVER_HINTS = {
+    "db",
+    "database",
+    "session",
+    "client",
+    "conn",
+    "connection",
+    "cursor",
+    "requests",
+    "http",
+    "api",
+    "repo",
+    "repository",
+    "collection",
+    "engine",
+    "orm",
+    "supabase",
+    "prisma",
+}
+
+# Constructors whose results support O(1) membership checks.
+CONSTANT_TIME_CONSTRUCTORS = {"set", "frozenset", "dict", "Counter", "defaultdict"}
+
+
 class PythonVisitor(ast.NodeVisitor):
     def __init__(self, path: Path, root: Path) -> None:
         self.path = path
         self.root = root
         self.loop_depth = 0
         self.findings: list[Finding] = []
+        self.constant_time_names: set[str] = set()
 
     def add(self, node: ast.AST, severity: str, kind: str, message: str, suggestion: str) -> None:
         self.findings.append(
@@ -181,15 +212,51 @@ class PythonVisitor(ast.NodeVisitor):
         self.generic_visit(node)
         self.loop_depth -= 1
 
+    def visit_Assign(self, node: ast.Assign) -> None:
+        self._track_assignment(node.targets, node.value)
+        self.generic_visit(node)
+
+    def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
+        if node.value is not None:
+            self._track_assignment([node.target], node.value)
+        self.generic_visit(node)
+
+    def _track_assignment(self, targets: list[ast.expr], value: ast.expr) -> None:
+        constant_time = isinstance(value, (ast.Set, ast.Dict, ast.SetComp, ast.DictComp)) or (
+            isinstance(value, ast.Call) and call_name(value.func) in CONSTANT_TIME_CONSTRUCTORS
+        )
+        for target in targets:
+            if isinstance(target, ast.Name):
+                if constant_time:
+                    self.constant_time_names.add(target.id)
+                else:
+                    self.constant_time_names.discard(target.id)
+
+    def _constant_time_lookup(self, node: ast.AST) -> bool:
+        if isinstance(node, (ast.Set, ast.Dict, ast.SetComp, ast.DictComp)):
+            return True
+        if isinstance(node, ast.Call) and call_name(node.func) in CONSTANT_TIME_CONSTRUCTORS:
+            return True
+        if isinstance(node, ast.Name) and node.id in self.constant_time_names:
+            return True
+        if isinstance(node, ast.Constant) and isinstance(node.value, str) and len(node.value) <= 32:
+            return True
+        if isinstance(node, (ast.Tuple, ast.List)) and len(node.elts) <= 10:
+            return True
+        return False
+
     def visit_Compare(self, node: ast.Compare) -> None:
-        if self.loop_depth and any(isinstance(op, (ast.In, ast.NotIn)) for op in node.ops):
-            self.add(
-                node,
-                "medium",
-                "membership-in-loop",
-                "Membership check inside a loop can become O(n*m) when the right side is a list or computed sequence.",
-                "If semantics allow it, build a set or dict once before the loop.",
-            )
+        if self.loop_depth:
+            for op, comparator in zip(node.ops, node.comparators):
+                if isinstance(op, (ast.In, ast.NotIn)) and not self._constant_time_lookup(comparator):
+                    self.add(
+                        node,
+                        "medium",
+                        "membership-in-loop",
+                        "Membership check inside a loop can become O(n*m) when the right side is a list or computed sequence.",
+                        "If semantics allow it, build a set or dict once before the loop.",
+                    )
+                    break
         self.generic_visit(node)
 
     def visit_Call(self, node: ast.Call) -> None:
@@ -210,20 +277,7 @@ class PythonVisitor(ast.NodeVisitor):
                 f"{name}() inside a loop may repeatedly scan a collection.",
                 "Consider precomputing an index/grouping or combining passes.",
             )
-        if self.loop_depth and name.lower() in {
-            "fetch",
-            "request",
-            "query",
-            "execute",
-            "find",
-            "find_one",
-            "find_many",
-            "select",
-            "where",
-            "get",
-            "post",
-            "put",
-        }:
+        if self.loop_depth and self._is_query_call(node, name.lower()):
             self.add(
                 node,
                 "high",
@@ -233,12 +287,30 @@ class PythonVisitor(ast.NodeVisitor):
             )
         self.generic_visit(node)
 
+    def _is_query_call(self, node: ast.Call, name: str) -> bool:
+        if name in STRONG_QUERY_NAMES:
+            return True
+        if name in GENERIC_QUERY_NAMES:
+            return receiver_name(node.func) in CLIENT_RECEIVER_HINTS
+        return False
+
 
 def call_name(func: ast.AST) -> str:
     if isinstance(func, ast.Name):
         return func.id
     if isinstance(func, ast.Attribute):
         return func.attr
+    return ""
+
+
+def receiver_name(func: ast.AST) -> str:
+    """Innermost attribute receiver: `self.db.get(...)` -> "db", `requests.get(...)` -> "requests"."""
+    if isinstance(func, ast.Attribute):
+        value = func.value
+        if isinstance(value, ast.Name):
+            return value.id.lower()
+        if isinstance(value, ast.Attribute):
+            return value.attr.lower()
     return ""
 
 
@@ -271,8 +343,10 @@ def scan_text(path: Path, root: Path, text: str) -> list[Finding]:
         stripped = line.strip()
         if not stripped or stripped.startswith(("//", "#", "*")):
             continue
-        indent = len(line) - len(line.lstrip(" "))
-        loop_stack = [(level, lno) for level, lno in loop_stack if level < indent + 4]
+        indent = len(line) - len(line.lstrip(" \t"))
+        # A loop is still open only while the current line is indented deeper than it;
+        # a line at the same or shallower indent closes it (otherwise sequential loops look nested).
+        loop_stack = [(level, lno) for level, lno in loop_stack if level < indent]
 
         if LOOP_RE.search(stripped):
             if loop_stack:
@@ -415,11 +489,16 @@ def main() -> int:
         else:
             findings.extend(scan_text(path, root, text))
 
-    findings = sorted(dedupe(findings), key=severity_rank)[: args.max_findings]
+    findings = sorted(dedupe(findings), key=severity_rank)
+    total = len(findings)
+    findings = findings[: args.max_findings]
     if args.format == "json":
         print(json.dumps([asdict(f) for f in findings], indent=2))
     else:
-        print(render_markdown(findings))
+        output = render_markdown(findings)
+        if total > len(findings):
+            output += f"\nShowing {len(findings)} of {total} findings. Raise --max-findings to see the rest.\n"
+        print(output)
     return 0
 
 

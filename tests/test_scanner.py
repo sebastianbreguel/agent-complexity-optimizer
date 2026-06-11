@@ -23,12 +23,6 @@ def run_scanner(fixture_dir: str | Path, fmt: str = "json") -> list[dict]:
     return result.stdout
 
 
-def run_scanner_on_file(filename: str, fmt: str = "json"):
-    fixture = FIXTURES / filename
-    assert fixture.exists(), f"Fixture not found: {fixture}"
-    return run_scanner(FIXTURES, fmt)
-
-
 def findings_for_file(filename: str) -> list[dict]:
     all_findings = run_scanner(FIXTURES)
     return [f for f in all_findings if f["path"].endswith(filename)]
@@ -52,12 +46,23 @@ class TestNPlusOne:
         kinds = {f["kind"] for f in findings}
         assert "io-or-query-in-loop" in kinds or "n+1-query" in kinds
 
+    def test_detects_generic_verb_on_client_receiver(self):
+        # client.get(url) in a loop: generic verb + client-looking receiver
+        findings = findings_for_file("n_plus_one.py")
+        lines = {f["line"] for f in findings if f["kind"] == "io-or-query-in-loop"}
+        assert len(lines) >= 2, f"expected db.query and client.get flagged, got lines {lines}"
+
 
 class TestMembershipInLoop:
     def test_detects_membership_check(self):
         findings = findings_for_file("membership_in_loop.py")
         kinds = {f["kind"] for f in findings}
         assert "membership-in-loop" in kinds
+
+    def test_set_backed_membership_not_flagged(self):
+        # clean_code.py builds a set before the loop; membership on it is O(1)
+        findings = findings_for_file("clean_code.py")
+        assert not [f for f in findings if f["kind"] == "membership-in-loop"]
 
 
 class TestSortInLoop:
@@ -76,7 +81,13 @@ class TestRenderPath:
 
 class TestCleanCode:
     def test_no_false_positives(self):
+        # includes dict.get() in a loop, set-backed membership, small literal tuple membership
         findings = findings_for_file("clean_code.py")
+        assert len(findings) == 0, f"False positives: {findings}"
+
+    def test_no_false_positives_js(self):
+        # includes cache.get() and map.delete() inside loops
+        findings = findings_for_file("clean_code.js")
         assert len(findings) == 0, f"False positives: {findings}"
 
 
