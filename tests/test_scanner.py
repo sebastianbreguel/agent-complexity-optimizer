@@ -78,6 +78,17 @@ class TestRenderPath:
         kinds = {f["kind"] for f in findings}
         assert "render-derived-work" in kinds
 
+    def test_component_zone_closes_at_component_end(self):
+        # toLabels() below the component must not inherit render-path findings
+        findings = findings_for_file("render_path.tsx")
+        render_lines = {f["line"] for f in findings if f["kind"] == "render-derived-work"}
+        assert all(line <= 4 for line in render_lines), f"zone bled past component: {render_lines}"
+
+    def test_upper_case_const_is_not_a_component(self):
+        # API_BASE_URL/DEFAULT_HEADERS must not open a component zone around summarize()
+        findings = findings_for_file("constants_module.ts")
+        assert len(findings) == 0, f"False positives: {findings}"
+
 
 class TestCleanCode:
     def test_no_false_positives(self):

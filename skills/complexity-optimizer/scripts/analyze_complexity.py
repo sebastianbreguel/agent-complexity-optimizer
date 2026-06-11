@@ -89,8 +89,11 @@ QUERY_IN_LOOP_RE = re.compile(
     r"|\b(?:db|database|client|session|conn|connection|api|http|repo|repository|knex|prisma|supabase|requests)\.\w+\s*\()",
     re.IGNORECASE,
 )
+# Component names need at least one lowercase letter (PascalCase) so UPPER_CASE constants
+# don't open a component zone; const-form additionally requires a function-looking right side.
 RENDER_HINT_RE = re.compile(
-    r"\b(function\s+[A-Z][A-Za-z0-9_]*|const\s+[A-Z][A-Za-z0-9_]*\s*=|export\s+default\s+function\s+[A-Z])"
+    r"\bfunction\s+[A-Z]\w*[a-z]\w*\s*\("
+    r"|\bconst\s+[A-Z]\w*[a-z]\w*\s*=\s*(?:async\s+)?(?:\(|function\b|React\.|memo\s*\(|forwardRef\s*\(|styled[.(]|[A-Za-z_$][\w$]*\s*=>)"
 )
 
 
@@ -429,7 +432,9 @@ def component_ranges(lines: list[str]) -> set[int]:
         if in_component:
             interesting.add(idx)
             brace_balance += line.count("{") - line.count("}")
-            if idx > active_until or (idx > active_until - 110 and brace_balance <= 0 and "}" in line):
+            # Close the zone as soon as braces balance out, so code below a small
+            # component doesn't inherit its render-path findings; cap as a fallback.
+            if idx > active_until or (brace_balance <= 0 and "}" in line):
                 in_component = False
     return interesting
 
