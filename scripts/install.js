@@ -123,14 +123,12 @@ const AGENTS = [
     detect: () =>
       fs.existsSync(path.join(HOME, ".config", "github-copilot")) ||
       process.env.GITHUB_COPILOT_TOKEN !== undefined,
-    install: () => {
-      const dest = path.join(HOME, ".github", SKILL_NAME);
-      copyFile(
-        path.join(agentsDir, "copilot", "copilot-instructions.md"),
-        path.join(dest, "copilot-instructions.md")
-      );
-      copyFile(analyzerScript, path.join(dest, "analyze_complexity.py"));
-    },
+    // Copilot reads .github/copilot-instructions.md from each repository,
+    // not from the home directory — a global install cannot reach it.
+    manual:
+      "Copilot reads instructions per-repository. Copy agents/copilot/copilot-instructions.md " +
+      "into your repo's .github/ directory, and skills/complexity-optimizer/scripts/analyze_complexity.py " +
+      "into .github/complexity-optimizer/.",
   },
   {
     name: "Gemini CLI",
@@ -238,17 +236,22 @@ function main() {
   let skipped = 0;
 
   for (const agent of AGENTS) {
-    if (agent.detect()) {
-      log(`  [+] ${agent.name}`);
-      try {
-        agent.install();
-        installed++;
-      } catch (err) {
-        warn(`${agent.name}: ${err.message}`);
-        skipped++;
-      }
-    } else {
+    if (!agent.detect()) {
       warn(`${agent.name} not detected`);
+      skipped++;
+      continue;
+    }
+    if (agent.manual) {
+      log(`  [manual] ${agent.name}: ${agent.manual}`);
+      skipped++;
+      continue;
+    }
+    log(`  [+] ${agent.name}`);
+    try {
+      agent.install();
+      installed++;
+    } catch (err) {
+      warn(`${agent.name}: ${err.message}`);
       skipped++;
     }
   }

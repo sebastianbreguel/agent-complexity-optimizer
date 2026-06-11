@@ -16,8 +16,7 @@
     "agent-complexity-optimizer": "scripts/install.js"
   },
   "scripts": {
-    "install-other-agents": "node scripts/install.js",
-    "postinstall": "node scripts/install.js --silent"
+    "install-other-agents": "node scripts/install.js"
   },
   "files": [
     ".claude-plugin",

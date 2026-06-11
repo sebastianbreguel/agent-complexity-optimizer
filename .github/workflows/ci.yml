@@ -29,3 +29,17 @@ jobs:
         run: |
           python skills/complexity-optimizer/scripts/analyze_complexity.py tests/fixtures --format json
           python skills/complexity-optimizer/scripts/analyze_complexity.py tests/fixtures --format markdown
+
+  installer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Installer dry-run smoke test
+        run: |
+          mkdir -p ~/.codex ~/.cursor ~/.gemini ~/.continue ~/.config/github-copilot
+          node scripts/install.js --dry-run
