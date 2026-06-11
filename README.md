@@ -119,6 +119,8 @@ python3 skills/complexity-optimizer/scripts/analyze_complexity.py /path/to/repo 
 | Amazon Q | auto-detect | Rules `.md` |
 | Zed AI | auto-detect | Assistant rules |
 
+Agent config files under `agents/` are generated from [`skills/complexity-optimizer/SKILL.md`](skills/complexity-optimizer/SKILL.md) and a condensed template — edit the source, then run `python3 scripts/sync_agents.py` (CI fails on drift).
+
 ## Usage
 
 Ask your agent naturally:

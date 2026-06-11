@@ -43,3 +43,6 @@ jobs:
         run: |
           mkdir -p ~/.codex ~/.cursor ~/.gemini ~/.continue ~/.config/github-copilot
           node scripts/install.js --dry-run
+
+      - name: Agent config drift check
+        run: python3 scripts/sync_agents.py --check
