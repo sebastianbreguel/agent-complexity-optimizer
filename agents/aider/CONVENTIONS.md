@@ -13,6 +13,8 @@ Run first-pass analysis:
 python3 ~/.aider/complexity-optimizer/analyze_complexity.py . --format markdown
 ```
 
+Scanner output = leads, not proof. Inspect surrounding code for context.
+
 ## Default Report
 
 Produce automatically when asked for analysis:
