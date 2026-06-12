@@ -13,6 +13,8 @@ Works as a skill/plugin for **13 AI coding agents**, or standalone via Python CL
 
 ## Demo
 
+![Scanner demo](https://raw.githubusercontent.com/sebastianbreguel/agent-complexity-optimizer/main/demo/demo.gif)
+
 Given this code:
 
 ```python
