@@ -25,6 +25,9 @@ jobs:
       - name: Run scanner tests
         run: pytest tests/ -v
 
+      - name: Rule precision/recall on labeled cases
+        run: python scripts/evaluate_rules.py
+
       - name: Run scanner on fixtures (smoke test)
         run: |
           python skills/complexity-optimizer/scripts/analyze_complexity.py tests/fixtures --format json
