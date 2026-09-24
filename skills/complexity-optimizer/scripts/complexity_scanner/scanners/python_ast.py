@@ -8,7 +8,7 @@ import ast
 from dataclasses import dataclass
 
 from ..findings import MODULE_SCOPE, Finding
-from .naming import SEQUENTIAL_NAME_RE, is_batch_name, is_constant_name, is_hashed_name, is_retry_name, name_tokens
+from .naming import is_batch_name, is_batch_size_name, is_constant_name, is_hashed_name, is_retry_name, is_sequential_name, name_tokens
 
 # Calls that are I/O whatever the receiver; query-like names need a client-looking receiver or a
 # SQL string argument; generic verbs (get, filter, save, ...) always need a client-looking receiver.
@@ -39,6 +39,7 @@ GENERIC_QUERY_NAMES = {
     "send",
     "get_object",
     "put_object",
+    "filter_by",
 }
 CLIENT_RECEIVER_HINTS = {
     "db",
@@ -64,6 +65,9 @@ CLIENT_RECEIVER_HINTS = {
     "s3",
     "dao",
 }
+# Flask-SQLAlchemy: `User.query.get(id)`, `User.query.filter_by(...)`. Matched exactly, since
+# "query" as a word inside names (`base_query_strategy`) says nothing about I/O.
+EXACT_CLIENT_RECEIVERS = {"query"}
 CONSTANT_TIME_CONSTRUCTORS = {"set", "frozenset", "dict", "Counter", "defaultdict", "OrderedDict", "range"}
 CONSTANT_TIME_METHODS = {"keys"}
 CONSTANT_TIME_TYPES = {
@@ -100,8 +104,8 @@ DEEP_COPY_NAMES = {"deepcopy"}
 class LoopFrame:
     kind: str  # "for", "while", "comprehension", "lambda"
     targets: set[str]
-    counts: bool
-    batched: bool = False  # walks chunks/batches/pages: one call per iteration is the intended batching
+    counts: bool  # grows the cost: not bounded, not a retry, not a walk over an outer element
+    per_item: bool = True  # runs once per data element: not a while/pagination, batch, retry or bounded loop
 
 
 def call_name(func: ast.AST) -> str:
@@ -150,8 +154,20 @@ def assigned_names(target: ast.AST) -> set[str]:
     return {node.id for node in ast.walk(target) if isinstance(node, ast.Name)}
 
 
-def identifiers(node: ast.AST, include_callee: bool = True) -> set[str]:
+def iterates_batches(iterable: ast.AST | None) -> bool:
+    """`chunked(ids, 100)`, `batched(...)`, or `range(0, n, batch_size)` yield batches, not elements."""
+    if not isinstance(iterable, ast.Call):
+        return False
+    name = call_name(iterable.func)
+    if name == "range" and len(iterable.args) == 3:
+        return any(is_batch_size_name(step) for step in identifiers(iterable.args[2]))
+    return is_batch_name(name)
+
+
+def identifiers(node: ast.AST | None, include_callee: bool = True) -> set[str]:
     """Every variable, attribute and called name in `node`: `range(0, n, self.batch_size)` -> {"range", "n", "self", "batch_size"}."""
+    if node is None:
+        return set()
     skip = {id(node.func)} if isinstance(node, ast.Call) and not include_callee else set()
     names = set()
     for child in ast.walk(node):
@@ -306,6 +322,9 @@ class PythonVisitor(ast.NodeVisitor):
         if root_name(node) in targets:
             return True
         if isinstance(node, ast.Subscript):
+            # `xs[i + 1:]` / `xs[:i]` walk the rest of the collection (pairwise, quadratic); `xs[i:i + size]` is a chunk.
+            if isinstance(node.slice, ast.Slice) and (node.slice.lower is None or node.slice.upper is None):
+                return False
             return bool(assigned_names(node.slice) & targets)
         if isinstance(node, ast.Call) and call_name(node.func) != "range":
             arguments = [*node.args, *(kw.value for kw in node.keywords)]
@@ -354,19 +373,24 @@ class PythonVisitor(ast.NodeVisitor):
 
     # -- loops -------------------------------------------------------------
 
-    def enter_loop(self, node: ast.AST, kind: str, iterable: ast.AST | None, target: ast.AST | None) -> None:
+    def enter_loop(
+        self, node: ast.AST, kind: str, iterable: ast.AST | None, target: ast.AST | None, condition: ast.AST | None = None
+    ) -> None:
         targets = assigned_names(target) if target else set()
-        names = targets | (identifiers(iterable) if iterable is not None else set())
-        retry = any(is_retry_name(name) for name in names)
-        counts = iterable is None or not (self.is_derived(iterable) or is_bounded_iterable(iterable) or retry)
+        described_by = targets | identifiers(iterable if iterable is not None else condition)
+        retry = any(is_retry_name(name) for name in described_by)
+        bounded = iterable is not None and is_bounded_iterable(iterable)
+        counts = not (retry or bounded or (iterable is not None and self.is_derived(iterable)))
+        batched = any(is_batch_name(name) for name in targets) or iterates_batches(iterable)
         if counts and self.depth:
             self.add(node, "nested-loop", self.depth + 1)
         if isinstance(iterable, ast.Call) and call_name(iterable.func) in ROW_ITERATORS:
             self.add(node, "dataframe-row-loop", self.depth + 1)
-        self.loops.append(LoopFrame(kind, targets, counts, any(is_batch_name(name) for name in names)))
+        per_item = kind != "while" and not (batched or retry or bounded)
+        self.loops.append(LoopFrame(kind, targets, counts, per_item))
 
-    def innermost_counting_loop(self) -> LoopFrame | None:
-        return next((frame for frame in reversed(self.loops) if frame.counts), None)
+    def in_per_item_loop(self) -> bool:
+        return any(frame.per_item for frame in self.loops)
 
     def visit_For(self, node: ast.For | ast.AsyncFor) -> None:
         self.visit(node.iter)  # evaluated once, in the enclosing scope
@@ -380,7 +404,7 @@ class PythonVisitor(ast.NodeVisitor):
     visit_AsyncFor = visit_For
 
     def visit_While(self, node: ast.While) -> None:
-        self.enter_loop(node, "while", None, None)
+        self.enter_loop(node, "while", None, None, condition=node.test)
         self.visit(node.test)
         for child in node.body:
             self.visit(child)
@@ -408,7 +432,7 @@ class PythonVisitor(ast.NodeVisitor):
         if self.depth and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
             if rebuilds_itself(node.targets[0].id, node.value):
                 self.add(node, "quadratic-accumulation")
-        if self.loops and self.is_element_of_loop(node.value):
+        if self.loops and self.is_derived(node.value):
             # `row = matrix[i]`, `batch = items[i:i + size]`: walking it later is part of this iteration.
             self.loops[-1].targets |= names
         if any(is_batch_name(name) for name in names):
@@ -430,9 +454,6 @@ class PythonVisitor(ast.NodeVisitor):
                 self.constant_time_names = self.constant_time_names - {node.target.id}
         self.generic_visit(node)
 
-    def is_element_of_loop(self, value: ast.AST) -> bool:
-        return self.is_derived(value)
-
     def mark_single_shot(self, value: ast.AST | None) -> None:
         if value is not None:
             self.single_shot.add(value)
@@ -452,10 +473,9 @@ class PythonVisitor(ast.NodeVisitor):
         self.generic_visit(node)
 
     def visit_Await(self, node: ast.Await) -> None:
-        innermost = self.innermost_counting_loop()
-        batched = isinstance(node.value, ast.Call) and call_name(node.value.func) in BATCH_AWAIT_NAMES
-        intended = node in self.single_shot or any(SEQUENTIAL_NAME_RE.search(scope) for scope in self.scopes)
-        if innermost and innermost.kind != "while" and not innermost.batched and not batched and not intended:
+        grouped = isinstance(node.value, ast.Call) and call_name(node.value.func) in BATCH_AWAIT_NAMES
+        intended = node in self.single_shot or any(is_sequential_name(scope) for scope in self.scopes)
+        if self.in_per_item_loop() and not grouped and not intended:
             self.add(node, "await-in-loop")
         self.generic_visit(node)
 
@@ -483,17 +503,8 @@ class PythonVisitor(ast.NodeVisitor):
             self.add(node, "repeated-scan")
         if name in DEEP_COPY_NAMES:
             self.add(node, "deep-copy-in-loop")
-        innermost = self.innermost_counting_loop()
-        # while loops are usually pagination or queue consumers: one call per page/message is the design.
         handles_batch = any(is_batch_name(arg) for arg in identifiers(node, include_callee=False))
-        if (
-            is_query_call(node, name)
-            and innermost is not None
-            and innermost.kind != "while"
-            and not innermost.batched
-            and node not in self.single_shot
-            and not handles_batch
-        ):
+        if is_query_call(node, name) and self.in_per_item_loop() and node not in self.single_shot and not handles_batch:
             self.add(node, "io-or-query-in-loop")
         if receiver is None or derived:
             return
@@ -529,7 +540,9 @@ def is_query_call(node: ast.Call, name: str) -> bool:
     if lowered in IO_CALL_NAMES:
         return True
     receiver = receiver_name(node.func)
-    client_like = bool(receiver) and bool(CLIENT_RECEIVER_HINTS & {*name_tokens(receiver), receiver.lower()})
+    client_like = bool(receiver) and (
+        bool(CLIENT_RECEIVER_HINTS & {*name_tokens(receiver), receiver.lower()}) or receiver in EXACT_CLIENT_RECEIVERS
+    )
     if lowered in STRONG_QUERY_NAMES:
         return client_like or (bool(node.args) and is_string_literal(node.args[0]))
     return lowered in GENERIC_QUERY_NAMES and client_like

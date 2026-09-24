@@ -38,12 +38,15 @@ def read_baseline(path: Path) -> Counter:
     return Counter(data["fingerprints"])
 
 
-def mark_new(findings: list[Finding], baseline: Counter) -> BaselineDiff:
-    """Set `status` on every finding; per fingerprint, the first N (in file order) are the known ones."""
+def mark_new(findings: list[Finding], baseline: Counter, scanned_paths: set[str]) -> BaselineDiff:
+    """Set `status` on every finding; per fingerprint, the first N (in file order) are the known ones.
+
+    Only baseline entries for files scanned this time can count as fixed, so `--changed` doesn't
+    report every finding in untouched files as fixed."""
     seen: Counter = Counter()
     for finding in sorted(findings, key=lambda f: (f.path, f.line)):
         key = fingerprint(finding)
         seen[key] += 1
         finding.status = "known" if seen[key] <= baseline[key] else "new"
-    fixed = sum(max(0, count - seen[key]) for key, count in baseline.items())
+    fixed = sum(max(0, count - seen[key]) for key, count in baseline.items() if key.split("::", 1)[0] in scanned_paths)
     return BaselineDiff(new=sum(f.status == "new" for f in findings), fixed=fixed)

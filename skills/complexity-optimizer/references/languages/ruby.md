@@ -10,8 +10,8 @@
 
 ## ActiveRecord
 
-- **Associations accessed in loops or views** (`@posts.each { |p| p.author.name }`): N+1. Use `includes` (or `preload` / `eager_load`). Catch them with the `bullet` gem or `strict_loading` (Rails 6.1+). *io-or-query-in-loop*
-- **`find` / `find_by` per id in a loop:** `where(id: ids)` once, then `index_by(&:id)`.
+- **Associations accessed in loops or views** (`@posts.each { |p| p.author.name }`): N+1 through lazy loading, invisible to the scanner (it looks like attribute access). Use `includes` (or `preload` / `eager_load`). Catch them with the `bullet` gem or `strict_loading` (Rails 6.1+).
+- **`find` / `find_by` per id in a loop:** `where(id: ids)` once, then `index_by(&:id)`. *io-or-query-in-loop*
 - **`.count` on loaded associations in loops:** use `size` (uses the loaded records) or counter caches.
 - **`each` over huge tables:** `find_each` / `in_batches` to avoid loading everything.
 - **Callbacks and validations on bulk writes:** `insert_all` / `upsert_all` / `update_all` skip them; use them for backfills when that's acceptable.

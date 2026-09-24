@@ -67,16 +67,14 @@ def main() -> int:
         ratio = f"{seconds[-1] / seconds[-2]:.2f}" if len(seconds) > 1 and seconds[-2] > 0 else "—"
         print(f"{n:>10} {seconds[-1]:>10.4f} {ratio:>8}")
 
-    # Runs dominated by process startup flatten the curve; fit on the rest when enough remain.
+    # Runs dominated by process startup flatten the curve, so they are left out of the fit. With
+    # fewer than two real measurements there is no verdict: a flat curve would wrongly say O(n).
     measured = [(n, t) for n, t in zip(sizes, seconds) if t >= STARTUP_DOMINATED_SECONDS]
-    fit = measured if len(measured) >= 2 else list(zip(sizes, seconds))
-    exponent = fitted_exponent([n for n, _ in fit], [t for _, t in fit])
-    print(f"\nFitted exponent: {exponent:.2f} -> {growth_class(exponent)} (from {len(fit)} of {len(sizes)} sizes)")
-    if len(fit) < len(sizes) or seconds[0] < STARTUP_DOMINATED_SECONDS:
-        print(
-            f"Note: runs under {STARTUP_DOMINATED_SECONDS * 1000:.0f} ms are mostly startup; use larger sizes for a sharper fit.",
-            file=sys.stderr,
-        )
+    if len(measured) < 2:
+        print(f"\nInconclusive: fewer than 2 runs took over {STARTUP_DOMINATED_SECONDS * 1000:.0f} ms (mostly startup). Use larger sizes.")
+        return 0
+    exponent = fitted_exponent([n for n, _ in measured], [t for _, t in measured])
+    print(f"\nFitted exponent: {exponent:.2f} -> {growth_class(exponent)} (from {len(measured)} of {len(sizes)} sizes)")
     return 0
 
 

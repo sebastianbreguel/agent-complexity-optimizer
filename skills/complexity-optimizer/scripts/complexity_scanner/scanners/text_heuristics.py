@@ -9,7 +9,7 @@ import re
 from dataclasses import dataclass
 
 from ..findings import MODULE_SCOPE, Finding
-from .naming import SEQUENTIAL_NAME_RE, is_batch_name, is_constant_name, is_hashed_name, is_retry_name
+from .naming import is_batch_name, is_batch_size_name, is_constant_name, is_hashed_name, is_retry_name, is_sequential_name
 from .render_path import RENDER_SUFFIXES, RENDER_TRANSFORM_RE, render_path_lines
 
 STRING_RE = re.compile(r'"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'|`(?:\\.|[^`\\])*`')
@@ -55,9 +55,10 @@ PER_ITEM_LOOP_KEYWORDS = {"for", "foreach", ""}
 
 # -- patterns inside loops -----------------------------------------------------
 
-# `.find(` also opens a callback loop; ranking keeps the stronger finding per line.
+# `.find(` also opens a callback loop; ranking keeps the stronger finding per line. A string or
+# `{ where }` argument means substring search or an ORM query, not a linear scan of an array.
 MEMBERSHIP_RE = re.compile(
-    r'\.(?:includes|indexOf|lastIndexOf|find|findIndex|findLast|contains|Contains|include\?)\s*\((?!\s*"")|\bin_array\s*\('
+    r'\.(?:includes|indexOf|lastIndexOf|find|findIndex|findLast|contains|Contains|include\?)\s*\((?!\s*(?:""|\{))|\bin_array\s*\('
 )
 # Declarations that tell a name's collection type; the latest one seen wins, so `banned: Set<..>`
 # in one method doesn't hide `banned: List<..>` in the next. contains/has on sets and maps is O(1).
@@ -155,7 +156,7 @@ class TextLoop:
     accumulator: str = ""
     keeps_open: bool = True  # False when a callback closes on its own line
     start: int = 0  # column of the callback method, so a line's own `.find(` isn't "inside" itself
-    batched: bool = False
+    per_item: bool = True  # runs once per data element: not a while/pagination, batch, retry or constant loop
 
 
 def code_only(line: str, in_template: bool, suffix: str) -> tuple[str, bool]:
@@ -191,24 +192,32 @@ def function_name(code: str) -> str:
     return "" if name in CONTROL_WORDS else name
 
 
-def make_loop(indent: int, keyword: str, targets: set[str], root: str, open_targets: set[str], **extra) -> TextLoop:
-    names = {name for name in targets | {root} if name}
+def make_loop(indent: int, keyword: str, targets: set[str], root: str, open_targets: set[str], described_by: set[str], **extra) -> TextLoop:
+    """`described_by`: names that tell what the loop repeats (header identifiers, or a batching call like `chunk(...)`)."""
+    retry = any(is_retry_name(name) for name in targets | described_by)
+    constant = is_constant_name(root)
     # Walking an outer element, a fixed UPPER_CASE collection, or retry attempts doesn't multiply the cost.
-    counts = root not in open_targets and not is_constant_name(root) and not any(is_retry_name(name) for name in names)
-    return TextLoop(indent, keyword, targets, counts, batched=any(is_batch_name(name) for name in names), **extra)
+    counts = root not in open_targets and not constant and not retry
+    batched = any(is_batch_name(name) for name in targets) or any(is_batch_name(n) or is_batch_size_name(n) for n in described_by)
+    per_item = keyword in PER_ITEM_LOOP_KEYWORDS and not (batched or retry or constant)
+    return TextLoop(indent, keyword, targets, counts, per_item=per_item, **extra)
 
 
 def parse_loop(code: str, indent: int, open_targets: set[str], chain_head: str) -> TextLoop | None:
     """The loop opened on this line, if any. `chain_head` is the line a `.method(` continuation belongs to."""
     keyword = KEYWORD_LOOP_RE.match(code)
     if keyword:
+        loop_keyword = keyword.group(1) or keyword.group(2)
         header = FOR_EACH_RE.search(code) or GO_RANGE_RE.search(code) or JAVA_FOREACH_RE.search(code)
         if header:
             targets, root = set(IDENT_RE.findall(header.group(1))), header.group(2)
+            # `for (const ids of chunk(all, 100))`: the iterable is a batching call, not a variable named batch.
+            described_by = {root} if re.search(rf"\b{re.escape(root)}\s*\(", code) else set()
         else:
             counter = C_STYLE_FOR_RE.search(code)
             targets, root = ({counter.group(1)} if counter else set()), ""
-        return make_loop(indent, keyword.group(1) or keyword.group(2), targets, root, open_targets)
+            described_by = set(IDENT_RE.findall(code))  # `while (tries < 3)`, `for (let attempt = 0; ...)`
+        return make_loop(indent, loop_keyword, targets, root, open_targets, described_by)
 
     call = CALL_LOOP_RE.search(code) or BLOCK_LOOP_RE.search(code)
     if not call or (call.re is CALL_LOOP_RE and NON_CALLBACK_ARG_RE.match(code, call.end())):
@@ -221,7 +230,7 @@ def parse_loop(code: str, indent: int, open_targets: set[str], chain_head: str) 
     keeps_open = rest.count("(") > rest.count(")") or code.rstrip().endswith(("{", "=>", "->", "do", "|"))
     prefix = code[: call.start()]
     root = chain_root(prefix) if prefix.strip() else chain_root(chain_head)
-    return make_loop(indent, "", targets, root, open_targets, accumulator=accumulator, keeps_open=keeps_open, start=call.start())
+    return make_loop(indent, "", targets, root, open_targets, set(), accumulator=accumulator, keeps_open=keeps_open, start=call.start())
 
 
 def loop_depth(loops: list[TextLoop]) -> int:
@@ -233,9 +242,8 @@ def loop_targets(loops: list[TextLoop]) -> set[str]:
 
 
 def is_per_item(loops: list[TextLoop]) -> bool:
-    """Inside a loop that makes one call per element (not a while/pagination loop, not a batch loop)."""
-    innermost = next((loop for loop in reversed(loops) if loop.counts), None)
-    return innermost is not None and innermost.keyword in PER_ITEM_LOOP_KEYWORDS and not innermost.batched
+    """Inside any loop that repeats once per data element (a retry `while` inside a `for` still counts)."""
+    return any(loop.per_item for loop in loops)
 
 
 def is_single_shot(code: str, enclosing: list[TextLoop]) -> bool:
@@ -257,7 +265,7 @@ def is_sequential_await(code: str, enclosing: list[TextLoop], function: str) -> 
         bool(enclosing[-1].keyword)
         and AWAIT_RE.search(FOR_AWAIT_RE.sub("", code)) is not None
         and not BATCH_AWAIT_RE.search(code)
-        and not SEQUENTIAL_NAME_RE.search(function)
+        and not is_sequential_name(function)
     )
 
 

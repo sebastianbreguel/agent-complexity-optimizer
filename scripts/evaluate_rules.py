@@ -60,8 +60,10 @@ def load_markers(cases: Path) -> dict[tuple[str, int], tuple[str, str]]:
 
 def scan(cases: Path) -> dict[tuple[str, int], str]:
     command = [sys.executable, str(SCANNER), str(cases), "--format", "json", "--max-findings", "1000000", "--include-tests"]
-    output = subprocess.run(command, capture_output=True, text=True, check=True).stdout
-    return {(f["path"], f["line"]): f["kind"] for f in json.loads(output)["findings"]}
+    result = subprocess.run(command, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise SystemExit(f"scanner failed on {cases}:\n{result.stderr}")
+    return {(f["path"], f["line"]): f["kind"] for f in json.loads(result.stdout)["findings"]}
 
 
 def evaluate(cases: Path = DEFAULT_CASES) -> Evaluation:

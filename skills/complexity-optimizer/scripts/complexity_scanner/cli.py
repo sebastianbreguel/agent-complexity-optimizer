@@ -2,6 +2,7 @@
 
 import argparse
 import subprocess
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from .baseline import mark_new, read_baseline, write_baseline
@@ -28,51 +29,62 @@ def parse_args(argv: list[str] | None) -> tuple[argparse.ArgumentParser, argpars
     return parser, parser.parse_args(argv)
 
 
-def scan_files(root: Path, paths: list[Path], include_tests: bool) -> tuple[list[Finding], int, int, dict[str, int]]:
-    findings: list[Finding] = []
-    skipped = {"tests": 0, "generated": 0}
-    scanned_files = scanned_lines = 0
+@dataclass
+class ScanResult:
+    findings: list[Finding] = field(default_factory=list)
+    scanned_paths: set[str] = field(default_factory=set)
+    scanned_lines: int = 0
+    skipped_tests: int = 0
+    generated_paths: list[str] = field(default_factory=list)
+
+
+def scan_files(root: Path, paths: list[Path], include_tests: bool) -> ScanResult:
+    result = ScanResult()
     for path in paths:
         relpath = path.relative_to(root).as_posix()
         if not include_tests and is_test_path(relpath):
-            skipped["tests"] += 1
+            result.skipped_tests += 1
             continue
         text = read_text(path)
         if text is None:
             continue
         lines = text.splitlines()
         if is_generated(path, lines):
-            skipped["generated"] += 1
+            result.generated_paths.append(relpath)
             continue
-        scanned_files += 1
-        scanned_lines += sum(1 for line in lines if line.strip())
-        findings += annotate(scan_source(relpath, path.suffix, text, lines), lines)
-    return findings, scanned_files, scanned_lines, skipped
+        result.scanned_paths.add(relpath)
+        result.scanned_lines += sum(1 for line in lines if line.strip())
+        result.findings += annotate(scan_source(relpath, path.suffix, text, lines), lines)
+    return result
 
 
 def main(argv: list[str] | None = None) -> int:
     parser, args = parse_args(argv)
     root = Path(args.root).resolve()
+    if not root.is_dir():
+        parser.error(f"{args.root} is not a directory")
     excludes = DEFAULT_EXCLUDES | set(args.exclude)
     try:
         paths = changed_source_files(root, args.changed, excludes) if args.changed else list_source_files(root, excludes)
     except (subprocess.CalledProcessError, FileNotFoundError, IndexError) as exc:
         parser.error(f"--changed {args.changed}: {getattr(exc, 'stderr', '') or exc}".strip())
 
-    findings, scanned_files, scanned_lines, skipped = scan_files(root, paths, args.include_tests)
-    ranked = rank(findings)
+    scan = scan_files(root, paths, args.include_tests)
+    ranked = rank(scan.findings)
     try:
-        diff = mark_new(ranked, read_baseline(args.baseline)) if args.baseline else None
+        diff = mark_new(ranked, read_baseline(args.baseline), scan.scanned_paths) if args.baseline else None
     except (OSError, ValueError, KeyError) as exc:
         parser.error(f"--baseline {args.baseline}: {exc}")
     if args.write_baseline:
         write_baseline(args.write_baseline, ranked)
 
-    health, label = health_score(ranked, scanned_lines)
+    # A health score over a handful of changed files isn't comparable with the repo's, so it's omitted.
+    health, label = (None, "n/a (partial scan)") if args.changed else health_score(ranked, scan.scanned_lines)
     report = Report(
-        scanned_files=scanned_files,
-        scanned_lines=scanned_lines,
-        skipped=skipped,
+        scanned_files=len(scan.scanned_paths),
+        scanned_lines=scan.scanned_lines,
+        skipped={"tests": scan.skipped_tests, "generated": len(scan.generated_paths)},
+        generated_files=scan.generated_paths,
         health=health,
         health_label=label,
         total_findings=len(ranked),

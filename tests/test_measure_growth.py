@@ -23,3 +23,14 @@ def test_command_requires_placeholder():
     result = subprocess.run([sys.executable, str(SCRIPT), "echo hi"], capture_output=True, text=True)
     assert result.returncode == 2
     assert "{n}" in result.stderr
+
+
+def test_short_runs_are_inconclusive():
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT), f"{sys.executable} -c pass {{n}}", "--sizes", "1", "2", "--repeat", "1"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    assert "Inconclusive" in result.stdout
+    assert "O(n)" not in result.stdout

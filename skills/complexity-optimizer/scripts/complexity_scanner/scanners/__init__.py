@@ -11,8 +11,9 @@ def scan_source(path: str, suffix: str, text: str, lines: list[str]) -> list[Fin
     if suffix != ".py":
         return scan_text(path, suffix, lines)
     try:
-        tree = ast.parse(text)
-    except SyntaxError as exc:
-        # A file that doesn't parse (Python 2, templates) still gets textual leads.
-        return [Finding(path, exc.lineno or 1, MODULE_SCOPE, "parse-error", 1, "high"), *scan_text(path, suffix, lines)]
-    return scan_python_tree(path, tree)
+        return scan_python_tree(path, ast.parse(text))
+    except (SyntaxError, ValueError, RecursionError) as exc:
+        # Python 2 files, templates, NUL bytes, or expressions too deep for the recursive visitor
+        # still get textual leads instead of aborting the whole scan.
+        line = getattr(exc, "lineno", None) or 1
+        return [Finding(path, line, MODULE_SCOPE, "parse-error", 1, "high"), *scan_text(path, suffix, lines)]

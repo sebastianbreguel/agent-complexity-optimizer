@@ -13,7 +13,7 @@ Measure before and after every optimization. Static findings say where to look; 
    python3 scripts/measure_growth.py "python3 bench.py {n}" --sizes 2000 4000 8000 16000
    ```
 
-   The script prints each run, the ratio to the previous size, and a fitted exponent. Choose sizes where the smallest run takes at least ~50 ms, or process startup hides the curve.
+   The script prints each run, the ratio to the previous size, and a fitted exponent. Runs under ~50 ms are mostly process startup and are left out of the fit; with fewer than two longer runs it answers "Inconclusive" instead of guessing, so pick larger sizes.
 5. **Measure memory** alongside time when the change trades one for the other (indexes, caches, precomputation): `/usr/bin/time -l <cmd>` on macOS or `/usr/bin/time -v <cmd>` on Linux reports peak RSS (resident memory).
 6. **Confirm in production data** when available: APM traces (Datadog, OpenTelemetry), slow query logs, `pg_stat_statements`, and error-rate or latency dashboards around the change.
 

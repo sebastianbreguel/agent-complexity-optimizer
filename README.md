@@ -96,7 +96,7 @@ The scanner produces (trimmed):
 
 Precision work so leads stay trustworthy on real repos:
 
-- **Python is parsed with its AST** (high confidence). It knows that `for cell in row` walks the outer element (not a cross product), that loops over `range(3)` or `UPPER_CASE` constants are bounded, that `seen: set[str]`, `self.cache = {}` or `users_by_id` are O(1) lookups, and that `while` pagination, `chunk`/`batch` loops and `return await` inside a loop are not per-element calls.
+- **Python is parsed with its AST** (high confidence). It knows that `for cell in row` walks the outer element (not a cross product), that loops over `range(3)` or `UPPER_CASE` constants are bounded, that `seen: set[str]`, `self.cache = {}` or `users_by_id` are O(1) lookups, and that `while` pagination, loops whose element is a chunk/batch/page (`for chunk in chunks`, `range(0, n, batch_size)`) and `return await` inside a loop are not per-element calls. Names are matched by whole tokens, so `entries` is not a retry and `webpage` is not a page.
 - **JavaScript/TypeScript, Java, Kotlin, C#, Go, Ruby, Rust** use line heuristics (low confidence) with the same ideas: strings and comments are blanked out, `Set`/`Map`/`HashSet` declarations are tracked, `repo.find({ where })` is a query and not a loop, and multi-line method chains and signatures are followed. Other listed extensions (PHP, Swift, Scala, Dart, Elixir, ...) get the generic patterns only.
 - **Noise is filtered before ranking:** files ignored by `.gitignore`, tests (opt in with `--include-tests`), and generated or minified files are skipped; migrations, seeds and scripts are ranked lower. Lines can be silenced with `complexity: ignore (reason)`.
 
@@ -207,7 +207,7 @@ Fitted exponent: 1.91 -> O(n^2) (from 3 of 4 sizes)
 
 ### Use it in CI
 
-Save today's findings as a baseline, then fail only when a change adds new ones:
+Save today's findings as a baseline, then fail only when a change adds new ones (`--changed` alone selects whole files, so combine it with a baseline from `main` to review a branch):
 
 ```bash
 python3 analyze_complexity.py . --write-baseline complexity-baseline.json    # once, commit the file

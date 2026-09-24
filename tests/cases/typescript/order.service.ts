@@ -196,4 +196,49 @@ export class OrderService {
       }),
     );
   }
+
+  async saveBatchRows(batch: Row[]) {
+    for (const row of batch) {
+      await this.rowRepository.save(row); // expect: io-or-query-in-loop
+    }
+  }
+
+  entriesAreNotRetries(users: User[], entries: Entry[]) {
+    for (const u of users) {
+      for (const e of entries) { // expect: nested-loop
+        console.log(u, e);
+      }
+    }
+  }
+
+  async retryInsideFor(urls: string[]) {
+    for (const url of urls) {
+      let tries = 0;
+      while (tries < 3) {
+        await fetch(url); // expect: io-or-query-in-loop
+        tries++;
+      }
+    }
+  }
+
+  async serializeOrders(orders: Order[]) {
+    for (const order of orders) {
+      await this.enricher.enrich(order); // expect: await-in-loop
+    }
+  }
+
+  async listPerAccount(accounts: Account[]) {
+    for (const account of accounts) {
+      const items = await this.api.list({ accountId: account.id, pageSize: 100 }); // expect: io-or-query-in-loop
+    }
+  }
+
+  async paginateWithOrm() {
+    let skip = 0;
+    while (true) {
+      const rows = await this.repository.find({ where: { active: true }, skip, take: 100 });
+      if (rows.length === 0) break;
+      skip += rows.length;
+    }
+  }
 }

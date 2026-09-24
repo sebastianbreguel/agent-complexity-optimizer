@@ -76,3 +76,22 @@ def neighbors(graph, nodes):
 
 def read_rows(path):
     return [path]
+
+
+def entries_are_not_retries(users, entries):
+    for u in users:
+        for e in entries:  # expect: nested-loop
+            print(u, e)
+
+
+def pairwise_suffix(xs):
+    for i, a in enumerate(xs):
+        for b in xs[i + 1 :]:  # expect: nested-loop
+            print(a, b)
+
+
+def retry_loop_is_not_nested(job, max_retries):
+    for item in job.items:
+        attempts = 0
+        while attempts < max_retries:
+            attempts += 1

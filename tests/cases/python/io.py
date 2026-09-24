@@ -96,3 +96,42 @@ def chunked_ids(ids, conn, size):
 def stepped_batches(ids, db, batch_size):
     for start in range(0, len(ids), batch_size):
         db.query("SELECT 1", ids[start : start + batch_size])
+
+
+def rows_of_a_batch(batch, db):
+    for row in batch:
+        db.save(row)  # expect: io-or-query-in-loop
+
+
+def rows_inside_chunks(chunks, db):
+    for chunk in chunks:
+        for row in chunk:
+            db.save(row)  # expect: io-or-query-in-loop
+
+
+def links_of_a_webpage(webpage, requests):
+    for link in webpage.links:
+        requests.get(link)  # expect: io-or-query-in-loop
+
+
+def retry_inside_for(urls, requests):
+    for url in urls:
+        attempts = 0
+        while attempts < 3:
+            requests.get(url)  # expect: io-or-query-in-loop
+            attempts += 1
+
+
+async def serialize_orders(orders):
+    for order in orders:
+        await enrich(order)  # expect: await-in-loop
+
+
+def flask_sqlalchemy(ids, User):
+    for uid in ids:
+        User.query.filter_by(id=uid).first()  # expect: io-or-query-in-loop
+        User.query.get(uid)  # expect: io-or-query-in-loop
+
+
+async def enrich(order):
+    return order

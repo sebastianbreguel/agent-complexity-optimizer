@@ -8,12 +8,16 @@ from .findings import Finding
 from .ranking import Hotspot
 
 
+GENERATED_SHOWN = 5
+
+
 @dataclass
 class Report:
     scanned_files: int
     scanned_lines: int
     skipped: dict[str, int]
-    health: int
+    generated_files: list[str]  # listed so a wrongly skipped hand-written file is easy to spot
+    health: int | None
     health_label: str
     total_findings: int
     baseline: BaselineDiff | None
@@ -27,16 +31,19 @@ def render_json(report: Report) -> str:
 
 def summary_lines(report: Report) -> list[str]:
     shown = len(report.findings)
+    health = f"{report.health}/100 ({report.health_label})" if report.health is not None else report.health_label
     lines = [
-        f"**Health: {report.health}/100 ({report.health_label})** · "
+        f"**Health: {health}** · "
         f"{report.scanned_files} files, {report.scanned_lines:,} lines scanned · {report.total_findings} findings"
         + (f" (showing the top {shown} by score; raise --max-findings for more)" if report.total_findings > shown else "")
     ]
     skipped = []
     if report.skipped["tests"]:
         skipped.append(f"{report.skipped['tests']} test files (use --include-tests)")
-    if report.skipped["generated"]:
-        skipped.append(f"{report.skipped['generated']} generated/minified files")
+    if report.generated_files:
+        listed = ", ".join(f"`{path}`" for path in report.generated_files[:GENERATED_SHOWN])
+        more = f" and {len(report.generated_files) - GENERATED_SHOWN} more" if len(report.generated_files) > GENERATED_SHOWN else ""
+        skipped.append(f"{len(report.generated_files)} generated/minified files ({listed}{more})")
     if skipped:
         lines.append("Skipped: " + ", ".join(skipped) + ".")
     if report.baseline:
