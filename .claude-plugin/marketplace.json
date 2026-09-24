@@ -1,7 +1,7 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "complexity-optimizer",
-  "description": "Performance doctor for AI coding agents. Finds O(n^2) loops, N+1 queries, sequential awaits, quadratic accumulation, and render-path hotspots; ranks the slowest functions with a health score; confirms with profilers and growth benchmarks. Produces safe optimization reports.",
+  "description": "Performance doctor for AI coding agents. Finds O(n^2) loops, N+1 queries, sequential awaits, quadratic accumulation, and render-path hotspots; ranks the functions most likely to be slow; confirms with profilers and growth benchmarks. Produces safe optimization reports.",
   "owner": {
     "name": "sebastianbreguel",
     "email": "breguelsebastian@gmail.com"
@@ -9,8 +9,8 @@
   "plugins": [
     {
       "name": "complexity-optimizer",
-      "description": "Find performance bottlenecks and inefficient algorithms, ranked by function with a 0-100 health score. Finds nested loops, N+1 queries, sequential awaits, spread/concat accumulation, sorts inside loops, .includes() instead of Set, pandas row loops, and render-path transforms, then confirms with profilers and growth benchmarks. Report only by default — no files touched unless you ask.",
-      "version": "1.0.1",
+      "description": "Find performance bottlenecks and inefficient algorithms, ranked by function. Finds nested loops, N+1 queries, sequential awaits, spread/concat accumulation, sorts inside loops, .includes() instead of Set, pandas row loops, and render-path transforms, then confirms with profilers and growth benchmarks. Report only by default — no files touched unless you ask.",
+      "version": "2.0.0",
       "category": "development",
       "source": "./skills/complexity-optimizer",
       "homepage": "https://github.com/sebastianbreguel/agent-complexity-optimizer",

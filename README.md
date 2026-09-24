@@ -5,7 +5,7 @@
 [![Agents](https://img.shields.io/badge/agents-13+-green)](#supported-agents)
 [![CI](https://github.com/sebastianbreguel/agent-complexity-optimizer/actions/workflows/ci.yml/badge.svg)](https://github.com/sebastianbreguel/agent-complexity-optimizer/actions)
 
-A performance doctor for your codebase. It finds inefficient algorithms and bottlenecks (O(n^2) loops, N+1 queries, sequential awaits, collections copied on every iteration), ranks the functions most likely to be slow, gives the repo a 0-100 health score, and helps your AI agent confirm each lead with profilers and growth benchmarks before touching code.
+A performance doctor for your codebase. It finds inefficient algorithms and bottlenecks (O(n^2) loops, N+1 queries, sequential awaits, collections copied on every iteration), ranks the functions most likely to be slow, and helps your AI agent confirm each lead with profilers and growth benchmarks before touching code.
 
 Works as a skill/plugin for **13 AI coding agents**, or standalone via a dependency-free Python CLI.
 
@@ -53,7 +53,7 @@ The scanner produces (trimmed):
 ```
 # Complexity Hotspots
 
-**Health: 49/100 (critical)** · 2 files, 21 lines scanned · 4 findings
+**Density: 25.8 points per 1,000 lines** · 2 files, 21 lines scanned · 4 findings
 
 ## Top functions
 
@@ -189,20 +189,33 @@ The skill follows a doctor workflow: scan, triage each hotspot (how big does n g
 
 ### Measure the growth order
 
-`measure_growth.py` runs a command at growing input sizes and fits the exponent, so "this is O(n^2)" becomes a measurement:
+`measure_growth.py` runs a command at growing input sizes, subtracts process startup, and fits the exponent of the median run with a 95% confidence interval, so "this is O(n^2)" becomes a measurement. It also reports how peak memory grows:
 
 ```bash
 python3 skills/complexity-optimizer/scripts/measure_growth.py "python3 bench.py {n}" --sizes 4000 8000 16000 32000
 ```
 
 ```
-         n    seconds   x prev
-      4000     0.0302        —
-      8000     0.0847     2.80
-     16000     0.3116     3.68
-     32000     1.1965     3.84
+         n    seconds   peak MB  local exp
+      4000     0.0336      16.0          —
+      8000     0.1032      16.3          —
+     16000     0.3678      16.9       1.95
+     32000     1.4459      18.2       2.01
 
-Fitted exponent: 1.91 -> O(n^2) (from 3 of 4 sizes)
+Startup (n=0): 0.0106 s and 15.7 MB, subtracted before fitting.
+Time exponent: 1.98 (95% CI 1.90 to 2.00, R² 1.00) -> O(n^2) (from 3 of 4 sizes)
+Memory: under 10 MB above startup at most sizes, too little to fit.
+```
+
+When the interval spans more than one class it answers "inconclusive" and lists them, instead of guessing. Memory growth under 10 MB above startup is too small to fit, as here.
+
+### Record verdicts
+
+Each rule's weight is a judgment call until real verdicts measure its precision. After triaging or fixing a finding, record whether it was real; the report gives precision per rule and language and flags noisy rules:
+
+```bash
+python3 skills/complexity-optimizer/scripts/verdicts.py add ~/.complexity-optimizer/verdicts/shop.jsonl "src/orders.py::load_all::io-or-query-in-loop" confirmed
+python3 skills/complexity-optimizer/scripts/verdicts.py report ~/.complexity-optimizer/verdicts/*.jsonl
 ```
 
 ### Use it in CI
@@ -240,11 +253,12 @@ The [original project](https://github.com/Kappaemme-git/codex-complexity-optimiz
 
 - **Universal installer** — auto-detects agents and writes native config formats
 - **Claude Code marketplace** — first-class plugin support
-- **Ranked hotspots and health score** — findings scored by pattern, loop depth and confidence, grouped by function
+- **Ranked hotspots** — findings scored by pattern, loop depth and confidence, grouped by function, with a density that tracks progress
 - **More patterns** — sequential awaits, quadratic accumulation, string building, front removal, pandas row loops, deep copies, regex compiles
 - **Precision on real code** — Python AST data-flow hints, type and naming heuristics, `.gitignore`/test/generated filtering
 - **Diff and CI modes** — `--changed`, baselines, `--fail-on`
-- **Measurement** — `measure_growth.py`, profiling and benchmarking guides per language
+- **Measurement** — `measure_growth.py` (time and memory exponents with confidence intervals), profiling and benchmarking guides per language
+- **Verdicts** — `verdicts.py` records whether findings were real and reports precision per rule
 - **A labeled rule corpus** — per-rule precision/recall to keep improving the scanner
 
 ## License

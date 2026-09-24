@@ -13,9 +13,10 @@ ONE_OFF_FACTOR = 0.3
 SUPPRESS_RE = re.compile(r"complexity:\s*ignore")
 CODE_SNIPPET_LENGTH = 120
 HOTSPOT_LIMIT = 10
-# Health is 50/100 when findings add up to this many score points per 1,000 scanned lines.
-DENSITY_AT_HEALTH_50 = 25.0
-HEALTH_LABELS = [(75, "healthy"), (50, "needs work"), (0, "critical")]
+# Findings in one function are correlated evidence (a confirmed one makes its siblings likely real too), so a
+# hotspot scores its strongest finding plus this share per extra distinct pattern instead of the sum:
+# five membership checks shouldn't outrank one N+1 query.
+EXTRA_KIND_BONUS = 0.1
 
 
 @dataclass
@@ -57,28 +58,33 @@ def rank(findings: list[Finding]) -> list[Finding]:
     return result
 
 
+def hotspot_score(group: list[Finding]) -> float:
+    extra_kinds = len({f.kind for f in group}) - 1
+    return max(f.score for f in group) * (1 + EXTRA_KIND_BONUS * extra_kinds)
+
+
 def hotspots(findings: list[Finding], limit: int = HOTSPOT_LIMIT) -> list[Hotspot]:
     groups: dict[tuple[str, str], list[Finding]] = defaultdict(list)
     for finding in findings:
         if finding.score > 0:
             groups[(finding.path, finding.function)].append(finding)
-    ranked = sorted(groups.items(), key=lambda item: (-sum(f.score for f in item[1]), item[0]))
-    return [
+    spots = [
         Hotspot(
             path=path,
             function=function,
             line=min(f.line for f in group),
-            score=round(sum(f.score for f in group), 1),
+            score=round(hotspot_score(group), 1),
             findings=len(group),
             kinds=dict(Counter(f.kind for f in group).most_common()),
         )
-        for (path, function), group in ranked[:limit]
+        for (path, function), group in groups.items()
     ]
+    return sorted(spots, key=lambda spot: (-spot.score, -spot.findings, spot.path, spot.function))[:limit]
 
 
-def health_score(findings: list[Finding], scanned_lines: int) -> tuple[int, str]:
-    """0-100, comparable across repos and over time: score points per 1,000 lines, squashed so 0 findings = 100."""
-    density = sum(f.score for f in findings) / max(1.0, scanned_lines / 1000)
-    health = round(100 / (1 + density / DENSITY_AT_HEALTH_50))
-    label = next(name for threshold, name in HEALTH_LABELS if health >= threshold)
-    return health, label
+def density(findings: list[Finding], scanned_lines: int) -> float:
+    """Score points per 1,000 scanned lines, comparable across repos and over time (lower is better).
+
+    Deliberately not a 0-100 grade with healthy/critical labels: no study ties this kind of density
+    to real slowness, so it tracks progress but is not a quality verdict."""
+    return round(sum(f.score for f in findings) / max(1.0, scanned_lines / 1000), 1)

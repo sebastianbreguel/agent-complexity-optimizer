@@ -7,7 +7,7 @@ Use this structure by default when asked for a complexity analysis, audit, scan,
 - Scope analyzed (whole repo, a path, or `--changed <base>`):
 - Stack detected:
 - Test/build commands detected:
-- Health score: `<n>/100 (<label>)` from the scanner, plus the baseline delta if one was used
+- Density: `<x>` score points per 1,000 lines from the scanner (lower is better; a trend, not a quality verdict), plus the baseline delta if one was used
 - Highest-impact hotspot:
 - Patch status: proposed / implemented / blocked
 - Files modified: yes / no
@@ -37,6 +37,7 @@ Column meaning:
 After the table, for each finding add a short note covering:
 
 - **Evidence:** where n comes from and how often the code runs; "measured" (profile, benchmark, query count) or "estimated".
+- **Verdict:** confirmed, fixed, false positive, or won't fix, as recorded with `verdicts.py`.
 - Why the pattern is costly, and why behavior should remain equivalent after the change.
 - The tests or measurements still needed.
 
@@ -49,7 +50,8 @@ After the table, for each finding add a short note covering:
 
 ## Verification
 
-- Tests run:
+- Profile summary (function, self %, total %, callers) and the workload used:
+- Tests run (the ones covering the edited code first):
 - Build/type/lint run:
 - Benchmark or measurement:
 - Residual risk:
@@ -66,10 +68,13 @@ For each optimized function:
 | `function_name` | RAM | | | | % |
 | `function_name` | Growth exponent (`measure_growth.py`) | | | | |
 
+- Benchmark command, sizes, and repeats:
+- Before/after as ranges (min to max), not single numbers; a win needs 1.2x or more with non-overlapping ranges:
 - Data source:
-- Iterations:
 - Environment:
 
 > Note: benchmarks ran on the development machine. Production numbers may differ based on hardware, load, and data volume.
 
 If benchmark was skipped: "Benchmark skipped: [reason]. See theoretical complexity estimates in Findings above."
+
+"No change recommended" is a valid result when the hotspot is under ~5% of the profile or the gain is within noise; say which.

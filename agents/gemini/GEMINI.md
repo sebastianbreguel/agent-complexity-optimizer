@@ -11,23 +11,24 @@ Quality bar: a better algorithm or data structure (Set/Map index, bulk query, bo
 ## Tools
 
 ```bash
-python3 ~/.gemini/complexity-optimizer/analyze_complexity.py . --format markdown   # ranked hotspots + 0-100 health score
+python3 ~/.gemini/complexity-optimizer/analyze_complexity.py . --format markdown   # hotspots ranked by function
 python3 ~/.gemini/complexity-optimizer/analyze_complexity.py . --changed main      # only files changed vs main
-python3 ~/.gemini/complexity-optimizer/measure_growth.py "python3 bench.py {n}"  # measured growth: x2 per doubling = O(n), x4 = O(n^2)
+python3 ~/.gemini/complexity-optimizer/measure_growth.py "python3 bench.py {n}"  # measured growth exponent with a confidence interval
+python3 ~/.gemini/complexity-optimizer/verdicts.py add ~/.complexity-optimizer/verdicts/<repo>.jsonl "<path>::<function>::<kind>" confirmed
 ```
 
 ## Doctor Workflow
 
 1. Baseline: stack, entry points, test/build commands.
-2. Scan: read the health score and top functions first, not the raw list.
+2. Scan: read the top functions first, not the raw list.
 3. Triage each hotspot: How big does n get (request payload, DB table, config constant)? How often does it run (per request/render/row, cron, one-off)? Is the fix cheap and safe? Drop bounded or one-off leads with a one-line reason.
 4. Check what the scanner can't see: ORM lazy loading in loops/serializers, missing indexes (EXPLAIN ANALYZE), blocking I/O in async code, React re-render churn, row-by-row pandas, N+1 split across functions.
-5. Confirm with a profiler or measure_growth.py when the code can run.
+5. Confirm when the code can run: profile a representative workload and cross it with the hotspots (under ~5% of the time drops in priority), or measure_growth.py for the growth order. Record a verdict per hotspot examined (confirmed, fixed, false_positive, wont_fix).
 6. Report: findings table with mandatory columns (never drop one): Location | Current pattern | Current (Cost) | Future | Impact | Risk | Recommended change. Add evidence per finding (measured vs estimated) and the tests needed. State "No files modified" unless implementation was requested.
 
 ## Optimize (only when asked)
 
-Prove behavior with tests, optimize conservatively, run tests/lint/build, benchmark before vs after on the same machine and data (growth exponent plus speed/RAM), then add a `## Performance Benchmark` table (Function | Metric | Before | After | Delta | Change%) with data source, iterations, runtime, and a dev-machine disclaimer. Skip with a reason if the environment is restricted.
+All steps required: prove behavior with tests; profile first and work only on functions with at least ~5% of the time; one fix card per finding ("line L of f() does X per element of Y; do Z"); fix the structure (index, batch, bounded concurrency, vectorize), never global caches, monkey-patches or benchmark-shaped fast paths; run the tests covering the edit after each fix; benchmark before vs after (exact command, sizes, repeats, alternating fresh-process runs; a win needs 1.2x or more with non-overlapping ranges); re-profile and iterate up to 4-5 rounds, keeping the best measured variant. "No change" is a valid result when the gain is within noise. Then add a `## Performance Benchmark` table (Function | Metric | Before | After | Delta | Change%) with data source, runtime, and a dev-machine disclaimer. Skip with a reason if the environment is restricted.
 
 ## Common Transforms
 

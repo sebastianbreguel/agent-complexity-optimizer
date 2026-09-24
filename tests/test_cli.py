@@ -129,20 +129,28 @@ class TestRanking:
         )
         assert scan_json(repo)["findings"] == []
 
-    def test_health_drops_with_findings(self, repo: Path):
+    def test_density_grows_with_findings(self, repo: Path):
         clean = repo / "clean"
         clean.mkdir()
         (clean / "ok.py").write_text("def f(a):\n    return sum(a)\n")
-        assert scan_json(clean)["health"] == 100
-        assert scan_json(repo)["health"] < 100
+        assert scan_json(clean)["density"] == 0
+        assert scan_json(repo)["density"] > 0
+
+    def test_one_query_loop_outranks_many_cheap_findings(self, repo: Path):
+        checks = "".join(f"        if x in names{i}:\n            print(x)\n" for i in range(5))
+        (repo / "old.py").write_text(
+            f"def many(items, names0, names1, names2, names3, names4):\n    for x in items:\n{checks}"
+            "\n\ndef one(ids, db):\n    for i in ids:\n        db.query(i)\n"
+        )
+        report = scan_json(repo)
+        assert [f["kind"] for f in report["findings"]].count("membership-in-loop") == 5
+        assert [h["function"] for h in report["hotspots"]] == ["one", "many"]
 
 
 class TestOutput:
     def test_json_shape(self):
         report = scan_json(FIXTURES)
-        assert {"scanned_files", "scanned_lines", "skipped", "health", "health_label", "total_findings", "hotspots", "findings"} <= set(
-            report
-        )
+        assert {"scanned_files", "scanned_lines", "skipped", "density", "total_findings", "hotspots", "findings"} <= set(report)
         expected = {
             "path",
             "line",
@@ -162,7 +170,7 @@ class TestOutput:
     def test_markdown_report(self):
         output = run_scanner(FIXTURES).stdout
         assert "# Complexity Hotspots" in output
-        assert "**Health:" in output
+        assert "**Density:" in output
         assert "## Top functions" in output
         assert "db.query(" in output  # code snippet of the finding
 
@@ -186,6 +194,14 @@ class TestCiFlags:
         report = scan_json(repo, "--baseline", str(baseline))
         assert report["baseline"] == {"new": 1, "fixed": 1}
         assert [f["status"] for f in report["findings"]] == ["new"]
+
+    def test_new_findings_are_listed_first(self, repo: Path):
+        baseline = repo / "baseline.json"
+        run_scanner(repo, "--write-baseline", str(baseline))
+        (repo / "new.py").write_text("def g(ids, names):\n    for i in ids:\n        if i in names:\n            print(i)\n")
+        findings = scan_json(repo, "--baseline", str(baseline))["findings"]
+        assert [f["status"] for f in findings] == ["new", "known"]
+        assert findings[0]["score"] < findings[1]["score"]
 
     def test_fail_on_ignores_known_findings(self, repo: Path):
         baseline = repo / "baseline.json"
@@ -232,7 +248,7 @@ class TestReviewRegressions:
         (repo / "new.py").write_text("# only a comment\n")
         report = scan_json(repo, "--changed", "main", "--baseline", str(baseline))
         assert report["baseline"] == {"new": 0, "fixed": 0}
-        assert report["health"] is None
+        assert report["density"] is None
 
     def test_unparseable_python_falls_back_to_text(self, repo: Path):
         (repo / "nul.py").write_bytes(b"x = 1\x00\n" + self.QUERY_LOOP.encode())
