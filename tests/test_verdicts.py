@@ -51,3 +51,24 @@ def test_report_on_a_missing_file_is_a_usage_error(tmp_path: Path):
     result = run_script("report", str(tmp_path / "none.jsonl"))
     assert result.returncode == 2
     assert "none.jsonl" in result.stderr
+
+
+def test_report_keeps_verdicts_on_retired_rules(tmp_path: Path):
+    file = tmp_path / "v.jsonl"
+    file.write_text('{"fingerprint": "src/a.py::load::old-rule", "verdict": "confirmed"}\n')
+    result = run_script("report", str(file))
+    assert result.returncode == 0
+    assert "| old-rule | .py | 1 | 1 |" in result.stdout
+
+
+def test_bad_lines_name_the_file_and_line(tmp_path: Path):
+    file = tmp_path / "v.jsonl"
+    file.write_text(
+        '{"fingerprint": "src/a.py::load::nested-loop", "verdict": "confirmed"}\n'
+        '{"fingerprint": "src/a.py::save::nested-loop", "verdict": "confimed"}\n'
+        '{"fingerprint": "src/a.py::sa\n'
+    )
+    result = run_script("report", str(file))
+    assert result.returncode == 2
+    assert f"{file}:2" in result.stderr
+    assert "unknown verdict 'confimed'" in result.stderr

@@ -30,11 +30,12 @@ def render_json(report: Report) -> str:
 
 def summary_lines(report: Report) -> list[str]:
     shown = len(report.findings)
+    order = "new first, then by score" if report.baseline else "by score"
     density = f"{report.density} points per 1,000 lines" if report.density is not None else "n/a (partial scan)"
     lines = [
         f"**Density: {density}** · "
         f"{report.scanned_files} files, {report.scanned_lines:,} lines scanned · {report.total_findings} findings"
-        + (f" (showing the top {shown} by score; raise --max-findings for more)" if report.total_findings > shown else "")
+        + (f" (showing the first {shown}, {order}; raise --max-findings for more)" if report.total_findings > shown else "")
     ]
     skipped = []
     if report.skipped["tests"]:

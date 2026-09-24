@@ -59,10 +59,20 @@ def prior_adjusted_precision(useful: int, total: int, parser: str) -> float:
 
 
 def split_fingerprint(fingerprint: str) -> tuple[str, str]:
+    """(path, kind) of `path::function::kind`; the function name itself may contain `::`."""
     location, _, kind = fingerprint.rpartition("::")
-    if "::" not in location or kind not in KINDS:
-        raise ValueError(f"expected path::function::kind with a known kind, got {fingerprint!r}")
+    if "::" not in location:
+        raise ValueError(f"expected path::function::kind, got {fingerprint!r}")
     return location.split("::", 1)[0], kind
+
+
+def read_record(line: str) -> dict:
+    # The kind isn't checked against today's rules: verdicts on a renamed or removed rule still count.
+    record = json.loads(line)
+    split_fingerprint(record["fingerprint"])
+    if record["verdict"] not in USEFUL | NOT_USEFUL:
+        raise ValueError(f"unknown verdict {record['verdict']!r}")
+    return record
 
 
 def latest_verdicts(files: list[Path]) -> list[dict]:
@@ -70,10 +80,14 @@ def latest_verdicts(files: list[Path]) -> list[dict]:
     latest = []
     for file in files:
         by_fingerprint = {}
-        for line in file.read_text(encoding="utf-8").splitlines():
-            if line.strip():
-                record = json.loads(line)
-                by_fingerprint[record["fingerprint"]] = record
+        for number, line in enumerate(file.read_text(encoding="utf-8").splitlines(), start=1):
+            if not line.strip():
+                continue
+            try:
+                record = read_record(line)
+            except (ValueError, KeyError, TypeError) as exc:
+                raise ValueError(f"{file}:{number}: {type(exc).__name__}: {exc}") from exc
+            by_fingerprint[record["fingerprint"]] = record
         latest += by_fingerprint.values()
     return latest
 
@@ -111,9 +125,11 @@ def main() -> int:
 
     if args.command == "add":
         try:
-            split_fingerprint(args.fingerprint)
+            _, kind = split_fingerprint(args.fingerprint)
         except ValueError as exc:
             parser.error(str(exc))
+        if kind not in KINDS:
+            parser.error(f"unknown rule {kind!r}; the scanner's rules are {', '.join(sorted(KINDS))}")
         record = {"fingerprint": args.fingerprint, "verdict": args.verdict, "ts": datetime.now(timezone.utc).isoformat(timespec="seconds")}
         args.file.parent.mkdir(parents=True, exist_ok=True)
         with args.file.open("a", encoding="utf-8") as out:
@@ -121,7 +137,7 @@ def main() -> int:
         return 0
     try:
         print(report(args.files))
-    except (OSError, ValueError, KeyError) as exc:
+    except (OSError, ValueError) as exc:
         parser.error(str(exc))
     return 0
 
