@@ -88,6 +88,62 @@ Correctness checks:
 - Preserve missing-record behavior.
 - Preserve rate-limit and retry semantics.
 
+### Sequential awaits in a loop
+
+Symptom: `for (const x of items) { await call(x) }` where the calls don't depend on each other.
+
+Preferred fix: start them together with a concurrency limit: `Promise.all` over chunks or `p-limit` (JS), `asyncio.gather` with a `Semaphore` or `TaskGroup` (Python), `errgroup` with `SetLimit` (Go), `Task.WhenAll` / `Parallel.ForEachAsync` (C#).
+
+Complexity: total latency goes from sum(call times) to about max(call time) per wave; the work is the same.
+
+Correctness checks:
+
+- Does a later call depend on an earlier result, or on its side effects (ordering, transactions, idempotency)?
+- Will parallel calls hit rate limits, connection pool limits, or lock contention?
+- Is partial failure handled (all-or-nothing vs `allSettled`)?
+
+### Collections rebuilt on every iteration
+
+Symptom: `acc = [...acc, x]`, `{ ...acc, [k]: v }` in `reduce`, `all = all.concat(page)`, `df = pd.concat([df, row])`, `s += piece` on immutable strings (Java, C#, Go, Kotlin).
+
+Preferred fix: mutate one accumulator (`push`, `append`, `acc[k] = v`, `StringBuilder`, `strings.Builder`), or collect the parts and combine once after the loop.
+
+Complexity: O(n^2) to O(n).
+
+Correctness checks:
+
+- Is the accumulator shared or exposed while the loop runs (immutability relied on elsewhere)?
+- Is the original input mutated by the new version?
+
+### Front removal from array lists
+
+Symptom: `pop(0)`, `shift()`, `remove(0)`, `insert(0, x)` inside a loop.
+
+Preferred fix: a deque (`collections.deque`, `ArrayDeque`, `VecDeque`), or iterate by index.
+
+Complexity: O(n^2) to O(n).
+
+### Per-iteration setup work
+
+Symptom: compiling a regex, building a formatter, deep-copying a template, or parsing the same config inside a loop or per request.
+
+Preferred fix: hoist it out of the loop or to module/static scope; copy only what changes.
+
+Complexity: removes a constant (sometimes large) per iteration; matters in hot paths.
+
+### Row-by-row DataFrame work
+
+Symptom: `iterrows()`, `itertuples()`, `apply(axis=1)`, Python loops over DataFrame rows.
+
+Preferred fix: vectorized column expressions, `merge`, `groupby().agg()` / `transform()`, `np.where` / `np.select`.
+
+Complexity: same big-O, but typically 10-100x faster because the work runs in compiled code.
+
+Correctness checks:
+
+- Missing values (`NaN`) propagate differently in vectorized expressions than in Python `if` checks.
+- Integer columns with missing values become floats; check dtypes of the result.
+
 ## What Not To Do
 
 - Do not replace clear linear code with complex structures when input sizes are tiny or the path is cold.
@@ -95,3 +151,5 @@ Correctness checks:
 - Do not use JSON serialization as a general-purpose key unless the key format is stable and collision-safe for the domain.
 - Do not change public ordering unless tests and callers prove it is irrelevant.
 - Do not trade O(n) for O(n log n) unless it removes a larger bottleneck or enables batching.
+- Do not parallelize calls without a concurrency limit; unbounded fan-out moves the bottleneck to the database or the API's rate limit.
+- Do not claim a speedup without a measurement; say "estimated" when there is none.

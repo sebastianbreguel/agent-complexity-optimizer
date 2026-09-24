@@ -1,108 +1,101 @@
 ---
 name: complexity-optimizer
-description: Analyze a software codebase for algorithmic complexity and performance hotspots, then propose or implement safe optimizations without breaking behavior. Use when asked to scan files, find inefficient loops, nested iteration, repeated scans, costly rendering/recomputation, N+1 queries, avoidable O(n^2) or O(n) operations, or reduce complexity such as O(n^2) to O(n log n) / O(n), while preserving tests, APIs, outputs, and maintainability.
+description: Find and fix performance bottlenecks and inefficient algorithms in any codebase. Scans for O(n^2) loops, N+1 queries, sequential awaits, quadratic accumulation, repeated sorts/searches and render-path waste; ranks the functions most likely to be slow with a 0-100 health score; confirms with profilers and growth benchmarks; and optimizes safely without breaking behavior. Use when asked to scan or audit performance, find bottlenecks or inefficient code, review a slow endpoint, job, pipeline or CI run, benchmark or profile code, review a diff for performance, or reduce complexity (e.g. O(n^2) to O(n log n) / O(n)).
 ---
 
 # Complexity Optimizer
 
 ## Core Rule
 
-Optimize only when the current behavior is understood and can be preserved. Prefer a small, proven improvement with tests over a broad rewrite with unclear correctness.
+Optimize only when the current behavior is understood and can be preserved. Prefer a small, proven improvement with tests over a broad rewrite with unclear correctness. Scanner output is a lead, never proof: a bottleneck is confirmed by input size, call frequency, and ideally a measurement.
 
-## Default Behavior
+## Pick the Mode
 
-When the user asks to analyze, scan, audit, review, or "give me a report" for a codebase, produce the full complexity report automatically. Do not require the user to specify report fields.
+| Request | Mode | Start with |
+|---------|------|------------|
+| "scan / audit / report / find bottlenecks" | Doctor report | Scanner on the repo, then triage |
+| "X is slow" (endpoint, job, function, command) | Targeted diagnosis | Reproduce and profile X, then scan the files on its path |
+| "review this PR / diff for performance" | Diff review | `--changed main`, then triage only the new findings |
+| "CI / build / tests are slow" | Pipeline audit | `references/domains/ci-pipelines.md` |
+| "ETL / data job / notebook is slow" | Pipeline audit | `references/domains/data-pipelines.md`, then scan |
+| "optimize / fix / implement" | Optimize | A report first, then the optimize workflow |
 
-Default report contents:
+Only edit files when the user asks to implement, fix, optimize, apply, change, or refactor. Analysis and reports never modify files, and say so.
 
-- Scope analyzed and detected stack/test commands.
-- Top findings ranked by likely impact.
-- File and line for each finding.
-- Findings rendered as a table with these mandatory columns, never dropped: Location | Current pattern | Current (Cost) | Future | Impact | Risk | Recommended change. See `references/report-template.md` for column meanings.
-- Tests, benchmarks, or manual checks needed.
-- Clear statement that no files were modified, unless the user explicitly requested implementation.
+## Doctor Workflow (default)
 
-Only edit files when the user asks to implement, fix, optimize, apply, change, refactor, or otherwise clearly requests code modification. If the user only asks for analysis or a report, do not modify files.
+1. **Baseline.** Identify languages, frameworks, entry points, test/build/lint commands, and how the code runs in production (request handlers, workers, cron, UI).
+2. **Scan.** Run the bundled scanner from this skill's directory:
 
-## Workflow
+   ```bash
+   python3 scripts/analyze_complexity.py <repo> --format json   # or --format markdown
+   ```
 
-1. Establish the baseline:
-   - Identify the language, framework, test command, build command, and performance-sensitive paths.
-   - Inspect existing tests before touching code.
-   - Run `scripts/analyze_complexity.py <repo>` for a first-pass hotspot list when scanning a repository.
+   Read `health` and `hotspots` (functions ranked by total score) first, then the findings. Do not paste the raw list.
+3. **Triage every top hotspot** with three questions, reading the surrounding code:
+   - **How big does n get?** Trace where each collection comes from: request payload, DB table, file, API page, or a fixed config constant.
+   - **How often does it run?** Per request, per render, per message, per row, nightly cron, or one-off script.
+   - **Is the fix cheap and safe?** Look for existing indexes, caches, batching helpers, or bulk endpoints to reuse.
 
-2. Rank opportunities:
-   - Prioritize code on hot paths, large input paths, rendering loops, database/API loops, and shared utilities.
-   - Separate algorithmic complexity from constant-factor cleanup.
-   - Do not patch every warning. Treat scanner output as leads, not proof.
-   - For report-only requests, inspect enough surrounding code to estimate current and proposed complexity; do not stop at raw scanner output.
+   Drop leads whose n is small and bounded or whose path runs once, and say why in one line. A finding in a hot path with unbounded n stays, even if the fix is hard.
+4. **Apply the heuristics the scanner cannot prove.** Open the matching `references/languages/<language>.md` and `references/domains/<domain>.md` and check the hot files for those patterns (ORM lazy loading, missing indexes, re-render churn, dtype and copy costs, blocking I/O on async paths, cross-function N+1 where the loop and the query live in different functions).
+5. **Confirm when the code can run.** Profile the slow path, or benchmark the function at growing sizes with `scripts/measure_growth.py` to show its real growth order (see `references/measuring.md`). A measurement beats any estimate; say which findings are measured and which are estimated.
+6. **Report** with `references/report-template.md`: health score, ranked findings table, evidence per finding, and the measurements or checks still needed.
 
-3. Prove behavior:
-   - Locate or add focused tests for the function/component being changed.
-   - Capture edge cases: empty input, duplicates, ordering stability, null/missing values, errors, permissions, pagination, time zones, and mutation side effects.
-   - If tests are absent and behavior is ambiguous, make the smallest refactor or ask for expected behavior before changing semantics.
+## Optimize Workflow (only when asked)
 
-4. Optimize conservatively:
-   - Replace repeated linear lookup with maps/sets when key equality is stable.
-   - Replace nested scans with indexing, grouping, two-pointer scans, sweep-line logic, binary search, memoization, batching, or precomputation only when the data shape supports it.
-   - In UI code, reduce unnecessary renders with stable props, memoized derived data, virtualization, debounced work, and moving expensive work out of render paths.
-   - In data access code, remove N+1 behavior with bulk fetches, joins, preloading, caching, or batching while preserving authorization and filtering.
-   - Before applying changes, snapshot the original function code for benchmark comparison in Step 6. Preferred: inline the original code into the benchmark script. Fallback: `git stash` only when complex imports make inlining impractical.
+1. **Prove behavior.** Locate or add focused tests for the function being changed. Cover empty input, duplicates, ordering stability, null/missing values, errors, permissions, pagination, time zones, and mutation side effects. If behavior is ambiguous and untested, ask before changing semantics.
+2. **Snapshot the original** for the before/after benchmark: inline the original function into the benchmark script; fall back to `git stash` only when imports make inlining impractical.
+3. **Optimize conservatively** using `references/optimization-playbook.md`: index with a map/set, batch or preload queries, run independent awaits concurrently with a limit, accumulate in place, sort once, memoize derived render data. Keep the patch localized.
+4. **Verify.** Run the narrow test first, then the broader test/type/lint/build commands.
+5. **Benchmark before vs after** on the same machine and data:
+   - Growth order: `python3 scripts/measure_growth.py "<command with {n}>" --sizes 1000 2000 4000 8000` for both versions.
+   - Absolute speed and memory: Python `timeit.repeat()` (min of 5 rounds) and `tracemalloc`; JS/TS `performance.now()` over many iterations and `process.memoryUsage().heapUsed`; other languages per `references/measuring.md`.
+   - Test data: project fixtures first (`tests/`, `fixtures/`, `__tests__/`, `test_data/`, `spec/`), otherwise synthetic data large enough to show the difference (10,000+ elements for quadratic patterns).
+   - Write temporary benchmark scripts to a temp directory and delete them afterwards. If benchmarking is impossible, write "Benchmark skipped: [reason]" and keep the theoretical estimate.
+6. **Report** the performance section of the template: before/after table, growth exponents, data source, iterations, runtime version, and the dev-machine disclaimer.
 
-5. Verify:
-   - Run relevant tests and type/lint/build commands.
-   - Add a micro-benchmark or measurement when the complexity improvement is non-obvious or performance-critical.
-   - Report the original complexity, new complexity, changed files, tests run, and any residual risk.
-
-6. Benchmark (post-implementation only):
-   - Skip this step if the user only requested analysis/report with no code changes.
-   - For each optimized function, generate a temporary benchmark script (`/tmp/bench_<name>.<ext>`) that measures the original vs optimized version.
-   - Test data priority: use project fixtures from `tests/`, `fixtures/`, `__tests__/`, `test_data/`, `spec/`, `sample_data/`. If none exist, generate synthetic data sized to make the complexity difference visible (minimum 1,000 elements for quadratic patterns, 10,000+ preferred).
-   - Python instrumentation: `timeit.repeat()` (min of 5 rounds, 1000 iterations) for speed, `tracemalloc.get_traced_memory()` for peak RAM.
-   - JavaScript/TypeScript instrumentation: `performance.now()` (average of 1000 iterations) for speed, `process.memoryUsage().heapUsed` delta for RAM.
-   - Run the benchmark for both versions, capture metrics.
-   - Delete temporary scripts after capturing results.
-   - If benchmarking fails (restricted environment, unsupported language, import errors), report: "Benchmark skipped: [reason]" and fall back to theoretical complexity estimates.
-
-7. Performance report:
-   - Add a `## Performance Benchmark` section to the report (see `references/report-template.md`).
-   - Table columns: Function, Metric (Speed/RAM), Before, After, Delta, Change (%).
-   - Auto-scale units for readability: μs/ms/s for speed, KB/MB/GB for RAM.
-   - Include: data source (real fixtures or synthetic + count), iteration count, detected runtime version.
-   - Include disclaimer: "Benchmarks ran on the development machine. Production numbers may differ based on hardware, load, and data volume."
-   - If benchmark was skipped, state the reason and refer to theoretical estimates in the Findings section.
-
-## First-Pass Scanner
-
-Use the bundled scanner from the skill directory:
+## Scanner Reference
 
 ```bash
-python3 scripts/analyze_complexity.py /path/to/repo --format markdown
-python3 scripts/analyze_complexity.py /path/to/repo --format json
+python3 scripts/analyze_complexity.py <repo>                          # markdown report
+python3 scripts/analyze_complexity.py <repo> --format json            # for tools and agents
+python3 scripts/analyze_complexity.py <repo> --changed main           # only files changed vs main
+python3 scripts/analyze_complexity.py <repo> --write-baseline b.json  # save today's findings
+python3 scripts/analyze_complexity.py <repo> --baseline b.json --fail-on high  # CI: fail only on new ones
 ```
 
-The scanner flags common patterns in Python, JavaScript, TypeScript, JSX/TSX, Java, Go, C, C++, C#, Ruby, PHP, Swift, Rust, Kotlin, Scala, and more. It intentionally favors readable leads over perfect static analysis.
+- **Selection:** respects `.gitignore`; skips tests (`--include-tests` to add them), generated and minified files. Migrations, seeds, scripts and examples are reported but ranked lower (`context: one-off`).
+- **Score** = pattern weight x loop depth x confidence. **Health** = 100 / (1 + density / 25), where density is score points per 1,000 scanned lines: 50 means 25 points per 1,000 lines.
+- **Confidence:** Python is parsed with its AST (`high`); other languages use line heuristics (`low`), so read their context before trusting them.
+- **Suppress** a reviewed line with a trailing comment `complexity: ignore (reason)`.
+- **Patterns:** `io-or-query-in-loop`, `await-in-loop`, `quadratic-accumulation`, `nested-loop`, `sort-in-loop`, `string-concat-in-loop`, `list-shift-in-loop`, `dataframe-row-loop`, `membership-in-loop`, `deep-copy-in-loop`, `repeated-scan`, `regex-compile-in-loop`, `render-derived-work`.
+- **Blind spots:** it does not know types, input sizes, or call frequency; it cannot follow calls across functions (a loop calling a helper that queries); it cannot see ORM lazy loading through attribute access, exponential recursion, or missing indexes. Step 4 of the doctor workflow covers these.
 
-If the scanner reports nothing, still inspect known hot paths manually. Rendering churn, database query patterns, and framework lifecycle issues often require repository-specific context.
+If the scanner reports nothing, still inspect the known hot paths manually.
 
 ## Optimization Safety Checklist
 
 Before editing:
 
-- Confirm the data sizes are large enough for complexity to matter.
-- Confirm the optimization preserves output ordering where callers may rely on it.
-- Confirm object identity, mutability, and reference sharing are not part of the public behavior.
-- Confirm caches have a valid invalidation strategy.
-- Confirm deduplication does not collapse distinct records that share a display label.
-- Confirm database batching preserves tenant, permission, soft-delete, pagination, and sorting constraints.
+- The data is large enough, or the code hot enough, for the complexity to matter.
+- Output ordering is preserved where callers may rely on it.
+- Object identity, mutability, and reference sharing are not part of the public behavior.
+- Caches have a valid invalidation strategy.
+- Deduplication does not collapse distinct records that share a display label.
+- Batched queries keep tenant, permission, soft-delete, pagination, and sorting constraints.
+- Concurrent calls respect rate limits, transactions, and ordering requirements.
 
 After editing:
 
-- Run the narrow test first, then the broadest relevant test/build command.
-- Compare before/after benchmark numbers when a benchmark exists or was added.
-- Keep the patch localized. Avoid formatting churn in unrelated files.
+- Narrow test first, then the broadest relevant test/build command.
+- Before/after benchmark numbers when a benchmark exists or was added.
+- The patch is localized, with no formatting churn in unrelated files.
 
 ## References
 
-- Read `references/optimization-playbook.md` for common O(n^2) to O(n log n) / O(n) transformations and framework-specific patterns.
-- Read `references/report-template.md` when preparing the final analysis or audit output.
+- `references/optimization-playbook.md`: transformations per pattern, with correctness checks.
+- `references/measuring.md`: profiling, benchmarking, growth tests, and how to read the results.
+- `references/languages/`: good and bad practices per language (Python, JavaScript/TypeScript, React, Go, JVM, C#, Ruby, Rust).
+- `references/domains/`: data access (SQL/ORM), data pipelines, CI pipelines.
+- `references/report-template.md`: the report format.
