@@ -153,3 +153,4 @@ Correctness checks:
 - Do not trade O(n) for O(n log n) unless it removes a larger bottleneck or enables batching.
 - Do not parallelize calls without a concurrency limit; unbounded fan-out moves the bottleneck to the database or the API's rate limit.
 - Do not claim a speedup without a measurement; say "estimated" when there is none.
+- Do not make code harder to read for a constant-factor gain: manual unrolling, cached `.length`, bit tricks, index loops replacing clear comprehensions, or inlined helpers need a measured, relevant win on a hot path. The goal is a better algorithm with code at least as clear as before.

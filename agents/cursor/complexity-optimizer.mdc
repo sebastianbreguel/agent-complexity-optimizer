@@ -12,6 +12,8 @@ When asked to analyze, scan, audit, or review performance, find bottlenecks or i
 
 Optimize only when current behavior is understood and can be preserved. Scanner output = leads, not proof: confirm input size and call frequency, and measure when the code can run.
 
+Quality bar: a better algorithm or data structure (Set/Map index, bulk query, bounded concurrency, one accumulator, one sort, vectorized ops) with code at least as readable as before, using idiomatic built-ins and library APIs. No obscure micro-optimizations (unrolling, cached length, bit tricks, index loops over clear comprehensions) without a measured gain on a hot path; if the faster version is much harder to read, report the trade-off with numbers instead of applying it.
+
 ## Tools
 
 ```bash

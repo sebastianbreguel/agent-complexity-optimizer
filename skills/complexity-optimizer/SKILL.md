@@ -9,6 +9,16 @@ description: Find and fix performance bottlenecks and inefficient algorithms in 
 
 Optimize only when the current behavior is understood and can be preserved. Prefer a small, proven improvement with tests over a broad rewrite with unclear correctness. Scanner output is a lead, never proof: a bottleneck is confirmed by input size, call frequency, and ideally a measurement.
 
+## Quality Bar: Better Algorithm, Not Uglier Code
+
+An optimization improves the algorithm or the data structure, and the result reads at least as clearly as the original:
+
+- **Change the shape of the work, not the style of the code:** a `Set`/`Map`/dict index instead of a nested scan, one bulk query instead of one per item, bounded concurrency instead of sequential awaits, one accumulator instead of copies, one sort instead of many, a vectorized column expression instead of a row loop.
+- **Use the idiomatic tool:** built-ins, the standard library, ORM batch/eager-loading APIs, vectorized libraries. Don't hand-roll a structure the language already has.
+- **Name the new step:** an index or batch built before the loop gets a name that says what it is (`users_by_id`, `orders_by_customer`); extract a small, well-named helper when it clarifies intent.
+- **Reject micro-optimizations that obscure intent** unless a measurement shows a relevant gain on a hot path: manual loop unrolling, caching `.length`, bit tricks, replacing clear comprehensions or `map`/`filter` with index loops, inlining helpers, premature object pooling.
+- **When the only faster version is much harder to read,** don't apply it silently: report the trade-off with numbers (time saved, input size, how often it runs) and let the user decide.
+
 ## Pick the Mode
 
 | Request | Mode | Start with |
@@ -46,7 +56,7 @@ Only edit files when the user asks to implement, fix, optimize, apply, change, o
 
 1. **Prove behavior.** Locate or add focused tests for the function being changed. Cover empty input, duplicates, ordering stability, null/missing values, errors, permissions, pagination, time zones, and mutation side effects. If behavior is ambiguous and untested, ask before changing semantics.
 2. **Snapshot the original** for the before/after benchmark: inline the original function into the benchmark script; fall back to `git stash` only when imports make inlining impractical.
-3. **Optimize conservatively** using `references/optimization-playbook.md`: index with a map/set, batch or preload queries, run independent awaits concurrently with a limit, accumulate in place, sort once, memoize derived render data. Keep the patch localized.
+3. **Optimize conservatively** using `references/optimization-playbook.md` and the quality bar above: index with a map/set, batch or preload queries, run independent awaits concurrently with a limit, accumulate in place, sort once, memoize derived render data. Keep the patch localized, and review the diff for readability before calling it done.
 4. **Verify.** Run the narrow test first, then the broader test/type/lint/build commands.
 5. **Benchmark before vs after** on the same machine and data:
    - Growth order: `python3 scripts/measure_growth.py "<command with {n}>" --sizes 1000 2000 4000 8000` for both versions.
