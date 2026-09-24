@@ -10,7 +10,7 @@
     {
       "name": "complexity-optimizer",
       "description": "Find performance bottlenecks and inefficient algorithms, ranked by function. Finds nested loops, N+1 queries, sequential awaits, spread/concat accumulation, sorts inside loops, .includes() instead of Set, pandas row loops, and render-path transforms, then confirms with profilers and growth benchmarks. Report only by default — no files touched unless you ask.",
-      "version": "1.0.1",
+      "version": "2.0.0",
       "category": "development",
       "source": "./skills/complexity-optimizer",
       "homepage": "https://github.com/sebastianbreguel/agent-complexity-optimizer",
