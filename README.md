@@ -197,17 +197,17 @@ python3 skills/complexity-optimizer/scripts/measure_growth.py "python3 bench.py 
 
 ```
          n    seconds   peak MB  local exp
-      4000     0.0356      16.0          —
-      8000     0.1057      16.3          —
-     16000     0.3744      16.9       1.94
-     32000     1.4587      18.2       1.99
+      4000     0.0336      16.0          —
+      8000     0.1032      16.3          —
+     16000     0.3678      16.9       1.95
+     32000     1.4459      18.2       2.01
 
-Startup (n=0): 0.0112 s and 15.7 MB, subtracted before fitting.
-Time exponent: 1.97 (95% CI 1.93 to 2.05, R² 1.00) -> O(n^2) (from 3 of 4 sizes)
-Memory exponent: 1.02 -> O(n) or O(n log n) (peak RSS above startup)
+Startup (n=0): 0.0106 s and 15.7 MB, subtracted before fitting.
+Time exponent: 1.98 (95% CI 1.90 to 2.00, R² 1.00) -> O(n^2) (from 3 of 4 sizes)
+Memory: under 10 MB above startup at most sizes, too little to fit.
 ```
 
-When the interval spans two classes it answers "inconclusive" and names both, instead of guessing.
+When the interval spans more than one class it answers "inconclusive" and lists them, instead of guessing. Memory growth under 10 MB above startup is too small to fit, as here.
 
 ### Record verdicts
 

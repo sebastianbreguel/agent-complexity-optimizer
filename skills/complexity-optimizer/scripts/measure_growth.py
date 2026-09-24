@@ -28,9 +28,10 @@ DEFAULT_SIZES = [1000, 2000, 4000, 8000]
 # Fixed so the shuffled run order and the confidence interval are reproducible.
 SEED = 0
 BOOTSTRAP_ROUNDS = 1000
-# Sizes whose work beyond startup is below these are mostly noise, so they're left out of the fit.
+# Sizes whose work beyond startup is below these are mostly noise, so they're left out of the fit. For memory,
+# startup's own peak sits a few MB above what the process keeps afterwards, so smaller growth reads too steep.
 MIN_WORK_SECONDS = 0.05
-MIN_WORK_BYTES = 1_000_000
+MIN_WORK_BYTES = 10_000_000
 # Below this R², log(time) over log(n) isn't a straight line: the cost isn't one power of n.
 MIN_R_SQUARED = 0.9
 # Local exponents that rise at every step, and by more than this overall, mean a higher-order term is taking
@@ -135,8 +136,9 @@ def growth_class(exponent: float) -> str:
 
 
 def verdict(low: float, high: float) -> str:
-    low_class, high_class = growth_class(low), growth_class(high)
-    return low_class if low_class == high_class else f"inconclusive, anywhere from {low_class} to {high_class}"
+    lower_limits = [-math.inf] + [limit for limit, _ in GROWTH_CLASSES[:-1]]
+    spanned = [label for lower, (upper, label) in zip(lower_limits, GROWTH_CLASSES) if lower <= high and low < upper]
+    return spanned[0] if len(spanned) == 1 else "inconclusive, the interval covers " + " | ".join(spanned)
 
 
 def main() -> int:
