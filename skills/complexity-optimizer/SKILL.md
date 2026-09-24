@@ -1,6 +1,6 @@
 ---
 name: complexity-optimizer
-description: Find and fix performance bottlenecks and inefficient algorithms in any codebase. Scans for O(n^2) loops, N+1 queries, sequential awaits, quadratic accumulation, repeated sorts/searches and render-path waste; ranks the functions most likely to be slow with a 0-100 health score; confirms with profilers and growth benchmarks; and optimizes safely without breaking behavior. Use when asked to scan or audit performance, find bottlenecks or inefficient code, review a slow endpoint, job, pipeline or CI run, benchmark or profile code, review a diff for performance, or reduce complexity (e.g. O(n^2) to O(n log n) / O(n)).
+description: Find and fix performance bottlenecks and inefficient algorithms in any codebase. Scans for O(n^2) loops, N+1 queries, sequential awaits, quadratic accumulation, repeated sorts/searches and render-path waste; ranks the functions most likely to be slow; confirms with profilers and growth benchmarks; and optimizes safely without breaking behavior. Use when asked to scan or audit performance, find bottlenecks or inefficient code, review a slow endpoint, job, pipeline or CI run, benchmark or profile code, review a diff for performance, or reduce complexity (e.g. O(n^2) to O(n log n) / O(n)).
 ---
 
 # Complexity Optimizer
@@ -30,7 +30,7 @@ An optimization improves the algorithm or the data structure, and the result rea
 | "ETL / data job / notebook is slow" | Pipeline audit | `references/domains/data-pipelines.md`, then scan |
 | "optimize / fix / implement" | Optimize | A report first, then the optimize workflow |
 
-Only edit files when the user asks to implement, fix, optimize, apply, change, or refactor. Analysis and reports never modify files, and say so.
+Only edit files when the user asks to implement, fix, optimize, apply, change, or refactor. Analysis and reports never modify project files, and say so (verdicts go to `~/.complexity-optimizer/`, outside the repo).
 
 ## Doctor Workflow (default)
 
@@ -41,29 +41,37 @@ Only edit files when the user asks to implement, fix, optimize, apply, change, o
    python3 scripts/analyze_complexity.py <repo> --format json   # or --format markdown
    ```
 
-   Read `health` and `hotspots` (functions ranked by total score) first, then the findings. Do not paste the raw list.
+   Read `hotspots` (functions ranked by their strongest finding) first, then the findings. Do not paste the raw list.
 3. **Triage every top hotspot** with three questions, reading the surrounding code:
    - **How big does n get?** Trace where each collection comes from: request payload, DB table, file, API page, or a fixed config constant.
    - **How often does it run?** Per request, per render, per message, per row, nightly cron, or one-off script.
    - **Is the fix cheap and safe?** Look for existing indexes, caches, batching helpers, or bulk endpoints to reuse.
 
-   Drop leads whose n is small and bounded or whose path runs once, and say why in one line. A finding in a hot path with unbounded n stays, even if the fix is hard.
+   Drop leads whose n is small and bounded or whose path runs once, and say why in one line. A finding in a hot path with unbounded n stays, even if the fix is hard. Record a verdict for every hotspot you examine (see Verdicts below).
 4. **Apply the heuristics the scanner cannot prove.** Open the matching `references/languages/<language>.md` and `references/domains/<domain>.md` and check the hot files for those patterns (ORM lazy loading, missing indexes, re-render churn, dtype and copy costs, blocking I/O on async paths, cross-function N+1 where the loop and the query live in different functions).
-5. **Confirm when the code can run.** Profile the slow path, or benchmark the function at growing sizes with `scripts/measure_growth.py` to show its real growth order (see `references/measuring.md`). A measurement beats any estimate; say which findings are measured and which are estimated.
-6. **Report** with `references/report-template.md`: health score, ranked findings table, evidence per finding, and the measurements or checks still needed.
+5. **Confirm when the code can run.** Profile a representative workload and cross the profile with the hotspots: a hotspot under ~5% of the total time drops in priority, and a profile hotspot with no finding is a blind spot of the scanner worth listing. Benchmark a suspect at growing sizes with `scripts/measure_growth.py` to show its real growth order (see `references/measuring.md`). A measurement beats any estimate; say which findings are measured and which are estimated.
+6. **Report** with `references/report-template.md`: ranked findings table, evidence per finding, verdicts, and the measurements or checks still needed.
 
 ## Optimize Workflow (only when asked)
 
+Every step is required. In agent studies, most of the possible gain was lost by editing the wrong function, and a mandatory profile and before/after benchmark were the changes that raised success the most.
+
 1. **Prove behavior.** Locate or add focused tests for the function being changed. Cover empty input, duplicates, ordering stability, null/missing values, errors, permissions, pagination, time zones, and mutation side effects. If behavior is ambiguous and untested, ask before changing semantics.
-2. **Snapshot the original** for the before/after benchmark: inline the original function into the benchmark script; fall back to `git stash` only when imports make inlining impractical.
-3. **Optimize conservatively** using `references/optimization-playbook.md` and the quality bar above: index with a map/set, batch or preload queries, run independent awaits concurrently with a limit, accumulate in place, sort once, memoize derived render data. Keep the patch localized, and review the diff for readability before calling it done.
-4. **Verify.** Run the narrow test first, then the broader test/type/lint/build commands.
-5. **Benchmark before vs after** on the same machine and data:
-   - Growth order: `python3 scripts/measure_growth.py "<command with {n}>" --sizes 1000 2000 4000 8000` for both versions.
-   - Absolute speed and memory: Python `timeit.repeat()` (min of 5 rounds) and `tracemalloc`; JS/TS `performance.now()` over many iterations and `process.memoryUsage().heapUsed`; other languages per `references/measuring.md`.
+2. **Profile first.** Run a sampling profiler that sees native frames (`py-spy record --native`, `perf`, async-profiler, `go tool pprof`; see `references/measuring.md`) on a workload that goes through the hotspot, and write a summary of at most 40 lines: function, self %, total %, caller chain. Work only on functions with at least ~5% of the total. If the code can't run here, say so: every gain after this point is an estimate.
+3. **Snapshot the original** for the before/after benchmark: inline the original function into the benchmark script; fall back to `git stash` only when imports make inlining impractical.
+4. **Write one fix card per finding:** "line L of `f()` does X for each element of Y; do Z", plus the one before/after example for that pattern from `references/optimization-playbook.md`. Don't load generic strategy lists.
+5. **Fix the structure, locally,** following the quality bar above: lower the cost per element (index, batch, bounded concurrency, vectorize, one accumulator). No global caches, monkey-patches, stack introspection, or fast paths shaped like the benchmark. A design-level change (new service, schema, architecture) is reported, not applied. Review the diff for readability before calling it done.
+6. **Verify after each fix.** Run the tests that cover the edited code first, then the broader test/type/lint/build commands. A failing test voids the speedup.
+7. **Benchmark before vs after** on the same machine and data, and write down the exact command, sizes, and repeats:
+   - Growth order: `python3 scripts/measure_growth.py "<command with {n}>"` for both versions; compare the exponents and their confidence intervals.
+   - Absolute speed: alternate old and new runs, at least 5 of each, each in a fresh process, on at least 2 sizes (one not used while developing). Claim a win only at 1.2x or more with non-overlapping ranges (min to max); smaller differences are noise unless a randomized A/B shows otherwise.
+   - Memory: `measure_growth.py` prints the peak-memory exponent; in-process, Python `tracemalloc`, JS `process.memoryUsage().heapUsed`, others per `references/measuring.md`.
    - Test data: project fixtures first (`tests/`, `fixtures/`, `__tests__/`, `test_data/`, `spec/`), otherwise synthetic data large enough to show the difference (10,000+ elements for quadratic patterns).
    - Write temporary benchmark scripts to a temp directory and delete them afterwards. If benchmarking is impossible, write "Benchmark skipped: [reason]" and keep the theoretical estimate.
-6. **Report** the performance section of the template: before/after table, growth exponents, data source, iterations, runtime version, and the dev-machine disclaimer.
+8. **Iterate until it flattens.** Profile again and continue while the same function still dominates or the exponent hasn't dropped, for at most 4-5 rounds. Keep the best measured variant, not the last one.
+9. **"No change" is a valid result.** If the hotspot is under ~5% of the profile or the gain is within noise, say so and don't ship the edit.
+10. **Sweep siblings and record verdicts.** After a confirmed fix, look for the same pattern elsewhere (filter the JSON findings by `kind`), and record `fixed` / `confirmed` / `false_positive` / `wont_fix` for each finding you examined.
+11. **Report** the performance section of the template: profile summary, before/after table with ranges, growth exponents, tests run, data source, runtime version, and the dev-machine disclaimer.
 
 ## Scanner Reference
 
@@ -72,7 +80,7 @@ python3 scripts/analyze_complexity.py <repo>                          # markdown
 python3 scripts/analyze_complexity.py <repo> --format json            # for tools and agents
 python3 scripts/analyze_complexity.py <repo> --changed main           # only files changed vs main
 python3 scripts/analyze_complexity.py <repo> --write-baseline b.json  # save today's findings
-python3 scripts/analyze_complexity.py <repo> --baseline b.json --fail-on high  # CI: fail only on new ones
+python3 scripts/analyze_complexity.py <repo> --baseline b.json --fail-on high  # CI: fail only on new ones; new findings listed first
 ```
 
 `--changed` selects whole files, so old findings in a touched file show up too. To see only what a branch introduces, write the baseline from `main` in a separate worktree and compare:
@@ -85,13 +93,25 @@ git worktree remove /tmp/base
 ```
 
 - **Selection:** respects `.gitignore`; skips tests (`--include-tests` to add them), files marked `@generated` / `Code generated ... DO NOT EDIT` / `<auto-generated`, and minified files (mostly lines over 1,000 characters), listed in `generated_files`. Migrations, seeds, scripts and examples are reported but ranked lower (`context: one-off`).
-- **Score** = pattern weight x loop depth x confidence. **Health** = 100 / (1 + density / 25), where density is score points per 1,000 scanned lines: 50 means 25 points per 1,000 lines. It is omitted with `--changed`, where a few files aren't comparable with the whole repo.
+- **Score** = pattern weight x loop depth x confidence. A hotspot scores its strongest finding plus 10% per extra distinct pattern: findings in one function are correlated evidence, so they aren't summed.
+- **Density** = score points per 1,000 scanned lines. Lower is better and it tracks progress over time, but it is not a quality verdict: no study ties this kind of density to real slowness. It is omitted with `--changed`, where a few files aren't comparable with the whole repo.
 - **Confidence:** Python is parsed with its AST (`high`); other languages use line heuristics (`low`), so read their context before trusting them.
 - **Suppress** a reviewed line with a trailing comment `complexity: ignore (reason)`.
 - **Patterns:** `io-or-query-in-loop`, `await-in-loop`, `quadratic-accumulation`, `nested-loop`, `sort-in-loop`, `string-concat-in-loop`, `list-shift-in-loop`, `dataframe-row-loop`, `membership-in-loop`, `deep-copy-in-loop`, `repeated-scan`, `regex-compile-in-loop`, `render-derived-work`.
 - **Blind spots:** it does not know types, input sizes, or call frequency; it cannot follow calls across functions (a loop calling a helper that queries); it cannot see ORM lazy loading through attribute access, exponential recursion, or missing indexes. Step 4 of the doctor workflow covers these.
 
 If the scanner reports nothing, still inspect the known hot paths manually.
+
+### Verdicts
+
+Weights are judgment calls until verdicts measure each rule's precision. Record one per finding you triage or fix, in a file per repo outside the repo:
+
+```bash
+python3 scripts/verdicts.py add ~/.complexity-optimizer/verdicts/<repo>.jsonl "<path>::<function>::<kind>" confirmed  # or fixed, false_positive, wont_fix
+python3 scripts/verdicts.py report ~/.complexity-optimizer/verdicts/*.jsonl   # precision per rule and language
+```
+
+`confirmed` and `fixed` count as useful; `false_positive` and `wont_fix` (real but not worth changing) don't. A finding that just disappeared from a later scan is not a verdict. With 10 or more verdicts, a rule whose not-useful rate is likely over 10% goes on probation and over 25% is flagged off.
 
 ## Optimization Safety Checklist
 

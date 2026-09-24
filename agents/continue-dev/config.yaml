@@ -7,7 +7,7 @@ customCommands:
     prompt: |
       Analyze this codebase for performance bottlenecks and algorithmic complexity.
 
-      Run the scanner first (ranked hotspots + 0-100 health score):
+      Run the scanner first (hotspots ranked by function):
       ```bash
       python3 ~/.continue/complexity-optimizer/analyze_complexity.py . --format markdown
       ```
@@ -17,7 +17,7 @@ customCommands:
       ORM lazy loading, missing indexes, blocking I/O in async code, React re-renders, row-by-row pandas.
 
       Report:
-      - Health score, scope analyzed, stack/test commands detected
+      - Scope analyzed, stack/test commands detected
       - Findings as a table, mandatory columns (never drop one): Location | Current pattern | Current (Cost) | Future | Impact | Risk | Recommended change
       - Evidence per finding (measured vs estimated) and the tests/benchmarks needed
 
