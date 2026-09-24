@@ -13,7 +13,7 @@ Measure before and after every optimization. Static findings say where to look; 
    python3 scripts/measure_growth.py "python3 bench.py {n}" --sizes 2000 4000 8000 16000
    ```
 
-   The script runs every size several times in a shuffled order, subtracts process startup (measured with n=0; pass `--startup-n 1` if 0 is invalid), and prints:
+   The script runs every size several times in a shuffled order, takes the median run, subtracts process startup (measured with n=0; pass `--startup-n 1` if 0 is invalid), and prints:
    - **Time exponent with a 95% confidence interval** from resampling the runs (bootstrap). When the interval spans two classes, the verdict says "inconclusive" and names both; add sizes or repeats.
    - **R²** of the log-log fit. Under 0.9 the cost isn't one power of n, so read the **local exponent** per size instead. A local exponent that keeps rising (for example n^2 hidden behind a large linear term) means the real order is at least the last value.
    - **Memory exponent** of the peak resident memory above startup (not on Windows).

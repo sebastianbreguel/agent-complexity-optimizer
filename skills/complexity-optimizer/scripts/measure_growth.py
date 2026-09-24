@@ -18,6 +18,7 @@ import math
 import os
 import random
 import shlex
+import statistics
 import subprocess
 import sys
 import time
@@ -66,7 +67,6 @@ def run_once(command: str, n: int) -> Run:
 def measure(command: str, sizes: list[int], repeat: int, rng: random.Random) -> dict[int, list[Run]]:
     """Run every size once per round in a shuffled order, so slow drift (heat, caches, other load) doesn't line up with n."""
     runs: dict[int, list[Run]] = {n: [] for n in sizes}
-    run_once(command, sizes[0])  # warm-up run (disk cache, compiled caches), not recorded
     for _ in range(repeat):
         for n in rng.sample(sizes, len(sizes)):
             runs[n].append(run_once(command, n))
@@ -102,23 +102,32 @@ def exponent_rises(local: list[float]) -> bool:
     return len(local) >= 2 and all(b > a for a, b in zip(local, local[1:])) and local[-1] - local[0] > RISING_EXPONENT
 
 
-def net_minimums(samples: dict[int, list[float]], startup: list[float], floor: float) -> dict[int, float]:
-    """Best run per size minus the best startup run, keeping only sizes with enough work to measure."""
-    base = min(startup)
-    net = {n: min(values) - base for n, values in samples.items()}
+def net_medians(samples: dict[int, list[float]], startup: list[float], floor: float) -> dict[int, float]:
+    """Median run per size minus the median startup run, keeping only sizes with enough work to measure.
+
+    The median rather than the fastest run: a bootstrap of the minimum gives intervals that contain the
+    true exponent far less than 95% of the time, and less the more repeats there are."""
+    base = statistics.median(startup)
+    net = {n: statistics.median(values) - base for n, values in samples.items()}
     return {n: value for n, value in net.items() if value >= floor}
 
 
-def exponent_interval(samples: dict[int, list[float]], startup: list[float], rng: random.Random) -> tuple[float, float]:
-    """95% interval of the exponent: refit on runs resampled with replacement (bootstrap)."""
+def exponent_interval(samples: dict[int, list[float]], startup: list[float], rng: random.Random) -> tuple[float, float] | None:
+    """95% interval of the exponent from refits on runs resampled with replacement (bootstrap).
+
+    Rounds where a resampled startup outweighs a size's work have no exponent and are skipped; None when
+    that's most of them, because startup noise is then as large as the work being measured."""
     sizes = sorted(samples)
     slopes = []
     for _ in range(BOOTSTRAP_ROUNDS):
-        base = min(rng.choices(startup, k=len(startup)))
-        values = [min(rng.choices(samples[n], k=len(samples[n]))) - base for n in sizes]
-        slopes.append(fitted_exponent(sizes, values))
+        base = statistics.median(rng.choices(startup, k=len(startup)))
+        values = [statistics.median(rng.choices(samples[n], k=len(samples[n]))) - base for n in sizes]
+        if min(values) > 0:
+            slopes.append(fitted_exponent(sizes, values))
+    if len(slopes) < BOOTSTRAP_ROUNDS // 2:
+        return None
     slopes.sort()
-    return slopes[int(0.025 * BOOTSTRAP_ROUNDS)], slopes[int(0.975 * BOOTSTRAP_ROUNDS) - 1]
+    return slopes[int(0.025 * len(slopes))], slopes[int(0.975 * len(slopes)) - 1]
 
 
 def growth_class(exponent: float) -> str:
@@ -134,7 +143,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Estimate the growth order of a command from timed runs.")
     parser.add_argument("command", help='Command with {n} for the input size, e.g. "python3 bench.py {n}".')
     parser.add_argument("--sizes", type=int, nargs="+", default=DEFAULT_SIZES)
-    parser.add_argument("--repeat", type=int, default=5, help="Runs per size; the fastest counts, all of them feed the interval.")
+    parser.add_argument("--repeat", type=int, default=5, help="Runs per size; the median counts, all of them feed the interval.")
     parser.add_argument(
         "--startup-n", type=int, default=0, help="Size that measures process startup, subtracted from the others (1 if 0 is invalid)."
     )
@@ -145,6 +154,10 @@ def main() -> int:
     if len(sizes) < 2 or sizes[0] <= 0:
         parser.error("need at least two different positive sizes besides --startup-n")
 
+    try:
+        run_once(args.command, args.startup_n)  # warm-up run (disk cache, compiled caches), not recorded
+    except subprocess.CalledProcessError:
+        parser.error(f"the command fails at n={args.startup_n}; pass --startup-n with a size it accepts, e.g. --startup-n 1")
     rng = random.Random(SEED)
     print(f"Running {len(sizes)} sizes plus startup (n={args.startup_n}), {args.repeat} rounds in shuffled order...\n")
     runs = measure(args.command, [args.startup_n, *sizes], args.repeat, rng)
@@ -153,7 +166,7 @@ def main() -> int:
     startup_seconds = [run.seconds for run in runs[args.startup_n]]
     startup_peaks = [float(run.peak_bytes) for run in runs[args.startup_n]]
 
-    work = net_minimums(seconds, startup_seconds, MIN_WORK_SECONDS)
+    work = net_medians(seconds, startup_seconds, MIN_WORK_SECONDS)
     fit_sizes = sorted(work)
     fit_values = [work[n] for n in fit_sizes]
     local = local_exponents(fit_sizes, fit_values)
@@ -161,23 +174,29 @@ def main() -> int:
 
     print(f"{'n':>10} {'seconds':>10} {'peak MB':>9} {'local exp':>10}")
     for n in sizes:
-        peak = f"{min(peaks[n]) / 1e6:.1f}" if MEASURES_MEMORY else "—"
+        peak = f"{statistics.median(peaks[n]) / 1e6:.1f}" if MEASURES_MEMORY else "—"
         step = f"{local_by_size[n]:.2f}" if n in local_by_size else "—"
-        print(f"{n:>10} {min(seconds[n]):>10.4f} {peak:>9} {step:>10}")
-    startup_memory = f" and {min(startup_peaks) / 1e6:.1f} MB" if MEASURES_MEMORY else ""
-    print(f"\nStartup (n={args.startup_n}): {min(startup_seconds):.4f} s{startup_memory}, subtracted before fitting.")
+        print(f"{n:>10} {statistics.median(seconds[n]):>10.4f} {peak:>9} {step:>10}")
+    startup_memory = f" and {statistics.median(startup_peaks) / 1e6:.1f} MB" if MEASURES_MEMORY else ""
+    print(f"\nStartup (n={args.startup_n}): {statistics.median(startup_seconds):.4f} s{startup_memory}, subtracted before fitting.")
 
     if len(work) < 2:
         print(f"Inconclusive: fewer than 2 sizes did over {MIN_WORK_SECONDS * 1000:.0f} ms of work beyond startup. Use larger sizes.")
     else:
         exponent = fitted_exponent(fit_sizes, fit_values)
-        low, high = exponent_interval({n: seconds[n] for n in fit_sizes}, startup_seconds, rng)
-        fit = r_squared(fit_sizes, fit_values, exponent)
-        print(
-            f"Time exponent: {exponent:.2f} (95% CI {low:.2f} to {high:.2f}, R² {fit:.2f}) -> {verdict(low, high)}"
-            f" (from {len(fit_sizes)} of {len(sizes)} sizes)"
-        )
-        if fit < MIN_R_SQUARED:
+        interval = exponent_interval({n: seconds[n] for n in fit_sizes}, startup_seconds, rng)
+        # Two points always fit a straight line, so R² only says something from three sizes on.
+        fit = r_squared(fit_sizes, fit_values, exponent) if len(fit_sizes) > 2 else None
+        if interval is None:
+            print(f"Time exponent: {exponent:.2f} -> inconclusive: startup time varies as much as the work. Use larger sizes.")
+        else:
+            low, high = interval
+            fit_note = f"R² {fit:.2f}" if fit is not None else "R² n/a with 2 sizes"
+            print(
+                f"Time exponent: {exponent:.2f} (95% CI {low:.2f} to {high:.2f}, {fit_note}) -> {verdict(low, high)}"
+                f" (from {len(fit_sizes)} of {len(sizes)} sizes)"
+            )
+        if fit is not None and fit < MIN_R_SQUARED:
             print(f"  R² under {MIN_R_SQUARED}: the cost isn't a single power of n, so read the local exponents per size.")
         if exponent_rises(local):
             print(
@@ -186,7 +205,7 @@ def main() -> int:
             )
 
     if MEASURES_MEMORY:
-        memory = net_minimums(peaks, startup_peaks, MIN_WORK_BYTES)
+        memory = net_medians(peaks, startup_peaks, MIN_WORK_BYTES)
         if len(memory) < 2:
             print(f"Memory: under {MIN_WORK_BYTES / 1e6:.0f} MB above startup at most sizes, too little to fit.")
         else:

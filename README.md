@@ -189,7 +189,7 @@ The skill follows a doctor workflow: scan, triage each hotspot (how big does n g
 
 ### Measure the growth order
 
-`measure_growth.py` runs a command at growing input sizes, subtracts process startup, and fits the exponent with a 95% confidence interval, so "this is O(n^2)" becomes a measurement. It also reports how peak memory grows:
+`measure_growth.py` runs a command at growing input sizes, subtracts process startup, and fits the exponent of the median run with a 95% confidence interval, so "this is O(n^2)" becomes a measurement. It also reports how peak memory grows:
 
 ```bash
 python3 skills/complexity-optimizer/scripts/measure_growth.py "python3 bench.py {n}" --sizes 4000 8000 16000 32000
@@ -197,14 +197,14 @@ python3 skills/complexity-optimizer/scripts/measure_growth.py "python3 bench.py 
 
 ```
          n    seconds   peak MB  local exp
-      4000     0.0310      16.0          —
-      8000     0.0990      16.2          —
-     16000     0.3717      16.9       2.01
-     32000     1.4369      18.2       1.98
+      4000     0.0356      16.0          —
+      8000     0.1057      16.3          —
+     16000     0.3744      16.9       1.94
+     32000     1.4587      18.2       1.99
 
-Startup (n=0): 0.0091 s and 15.6 MB, subtracted before fitting.
-Time exponent: 1.99 (95% CI 1.97 to 2.01, R² 1.00) -> O(n^2) (from 3 of 4 sizes)
-Memory exponent: 1.03 -> O(n) or O(n log n) (peak RSS above startup)
+Startup (n=0): 0.0112 s and 15.7 MB, subtracted before fitting.
+Time exponent: 1.97 (95% CI 1.93 to 2.05, R² 1.00) -> O(n^2) (from 3 of 4 sizes)
+Memory exponent: 1.02 -> O(n) or O(n log n) (peak RSS above startup)
 ```
 
 When the interval spans two classes it answers "inconclusive" and names both, instead of guessing.

@@ -12,7 +12,7 @@ from measure_growth import (
     fitted_exponent,
     growth_class,
     local_exponents,
-    net_minimums,
+    net_medians,
     verdict,
 )
 
@@ -38,7 +38,7 @@ def test_growth_class_labels():
 def test_startup_is_subtracted_before_fitting():
     startup = 0.5
     samples = {n: [startup + n * 1e-4] for n in SIZES}
-    work = net_minimums(samples, [startup], 0.05)
+    work = net_medians(samples, [startup], 0.05)
     assert round(fitted_exponent(sorted(work), [work[n] for n in sorted(work)]), 2) == 1.0
     assert fitted_exponent(SIZES, [samples[n][0] for n in SIZES]) < 0.7  # what startup does to an O(n) curve
 
@@ -46,9 +46,16 @@ def test_startup_is_subtracted_before_fitting():
 def test_interval_brackets_the_true_exponent():
     noise = [1.0, 1.04, 1.02, 1.07, 1.01]
     samples = {n: [n * n * 1e-8 * factor for factor in noise] for n in SIZES}
-    low, high = exponent_interval(samples, [0.0] * len(noise), random.Random(0))
+    interval = exponent_interval(samples, [0.0] * len(noise), random.Random(0))
+    assert interval is not None
+    low, high = interval
     assert low <= 2.0 <= high
     assert high - low < 0.2
+
+
+def test_interval_is_none_when_startup_noise_swamps_the_work():
+    samples = {n: [1.0 + n * 1e-6, 1.0 + n * 1e-6] for n in SIZES}
+    assert exponent_interval(samples, [0.5, 1.5, 1.5], random.Random(0)) is None  # 1.5 is the resampled median ~74% of the time
 
 
 def test_verdict_is_inconclusive_across_classes():
@@ -74,6 +81,14 @@ def test_short_runs_are_inconclusive():
     assert result.returncode == 0
     assert "Inconclusive" in result.stdout
     assert "O(n)" not in result.stdout
+
+
+def test_command_failing_at_zero_asks_for_another_startup_size(tmp_path: Path):
+    bench = tmp_path / "bench.py"
+    bench.write_text("import sys\ndata = list(range(int(sys.argv[1])))\nprint(sum(data) / len(data))\n")
+    result = run_script(f"{sys.executable} {bench} {{n}}", "--sizes", "10", "20", "--repeat", "1")
+    assert result.returncode == 2
+    assert "--startup-n" in result.stderr
 
 
 @pytest.mark.skipif(not MEASURES_MEMORY, reason="peak memory needs os.wait4")
