@@ -3,30 +3,31 @@
 
 customCommands:
   - name: complexity-report
-    description: Analyze codebase for algorithmic complexity hotspots
+    description: Find performance bottlenecks and inefficient algorithms
     prompt: |
-      Analyze this codebase for algorithmic complexity and performance hotspots.
+      Analyze this codebase for performance bottlenecks and algorithmic complexity.
 
-      Run the scanner first:
+      Run the scanner first (ranked hotspots + 0-100 health score):
       ```bash
       python3 ~/.continue/complexity-optimizer/analyze_complexity.py . --format markdown
       ```
 
-      Then produce a report with:
-      - Scope analyzed, stack/test commands detected
-      - Top findings ranked by impact
+      Then triage each top function: how big does n get, how often does it run, is the fix cheap and safe?
+      Drop bounded or one-off leads with a one-line reason. Also check what the scanner can't see:
+      ORM lazy loading, missing indexes, blocking I/O in async code, React re-renders, row-by-row pandas.
+
+      Report:
+      - Health score, scope analyzed, stack/test commands detected
       - Findings as a table, mandatory columns (never drop one): Location | Current pattern | Current (Cost) | Future | Impact | Risk | Recommended change
-      - Tests/benchmarks needed
+      - Evidence per finding (measured vs estimated) and the tests/benchmarks needed
 
       Follow these rules:
       - Only edit files if I explicitly ask to implement/fix/optimize
-      - Prefer maps/sets for lookups, indexing for nested scans, memoization for renders, bulk fetch for N+1
-      - Verify: tests + lint/build, benchmark if non-obvious
-      - Safety: preserve ordering, identity, auth/tenant constraints
+      - Prefer maps/sets for lookups, bulk fetches for N+1, bounded concurrency for sequential awaits, one accumulator instead of spread/concat
+      - Safety: preserve ordering, identity, auth/tenant constraints, rate limits
 
       After implementing optimizations, benchmark the changes:
-      - Generate a temp script measuring original vs optimized function (timeit+tracemalloc for Python, performance.now+process.memoryUsage for JS/TS)
-      - Use project fixtures first, synthetic data as fallback
-      - Report results in a Performance Benchmark table: Function | Metric | Before | After | Delta | Change%
-      - Auto-scale units (μs/ms/s, KB/MB/GB), include data source and dev-machine disclaimer
-      - Skip with reason if environment is restricted
+      - Growth order: python3 ~/.continue/complexity-optimizer/measure_growth.py "python3 bench.py {n}"
+      - Speed/RAM: timeit + tracemalloc (Python), performance.now + process.memoryUsage (JS/TS)
+      - Report a Performance Benchmark table: Function | Metric | Before | After | Delta | Change%
+      - Include data source and a dev-machine disclaimer; skip with a reason if the environment is restricted

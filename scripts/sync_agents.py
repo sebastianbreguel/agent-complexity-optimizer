@@ -23,18 +23,21 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 SOURCE_SKILL = ROOT / "skills" / "complexity-optimizer" / "SKILL.md"
 
-# Scanner install path per condensed agent (must match scripts/install.js destinations).
+# Tools directory per condensed agent: analyze_complexity.py, measure_growth.py and the
+# complexity_scanner package are installed there (must match scripts/install.js destinations).
 CONDENSED_TARGETS = {
-    "agents/windsurf/.windsurfrules": "~/.codeium/windsurf/complexity-optimizer/analyze_complexity.py",
-    "agents/cline/.clinerules": "~/.cline/complexity-optimizer/analyze_complexity.py",
-    "agents/gemini/GEMINI.md": "~/.gemini/complexity-optimizer/analyze_complexity.py",
-    "agents/opencode/AGENTS.md": "~/.opencode/complexity-optimizer/analyze_complexity.py",
-    "agents/copilot/copilot-instructions.md": ".github/complexity-optimizer/analyze_complexity.py",
-    "agents/aider/CONVENTIONS.md": "~/.aider/complexity-optimizer/analyze_complexity.py",
-    "agents/amazon-q/.amazonq/rules/complexity-optimizer.md": "~/.amazonq/complexity-optimizer/analyze_complexity.py",
-    "agents/zed/complexity-optimizer.md": "~/.config/zed/complexity-optimizer/analyze_complexity.py",
-    "agents/cursor/complexity-optimizer.mdc": "~/.cursor/rules/complexity-optimizer/analyze_complexity.py",
+    "agents/windsurf/.windsurfrules": "~/.codeium/windsurf/complexity-optimizer",
+    "agents/cline/.clinerules": "~/.cline/complexity-optimizer",
+    "agents/gemini/GEMINI.md": "~/.gemini/complexity-optimizer",
+    "agents/opencode/AGENTS.md": "~/.opencode/complexity-optimizer",
+    "agents/copilot/copilot-instructions.md": ".github/complexity-optimizer",
+    "agents/aider/CONVENTIONS.md": "~/.aider/complexity-optimizer",
+    "agents/amazon-q/.amazonq/rules/complexity-optimizer.md": "~/.amazonq/complexity-optimizer",
+    "agents/zed/complexity-optimizer.md": "~/.config/zed/complexity-optimizer",
+    "agents/cursor/complexity-optimizer.mdc": "~/.cursor/rules/complexity-optimizer",
 }
+CLAUDE_TOOLS_DIR = "~/.claude/complexity-optimizer"
+REFERENCES_URL = "https://github.com/sebastianbreguel/agent-complexity-optimizer/tree/main/skills/complexity-optimizer/references"
 
 CURSOR_FRONTMATTER = """---
 description: Analyze codebase for algorithmic complexity hotspots and propose safe optimizations. Use when asked to find inefficient loops, N+1 queries, O(n^2) patterns, or reduce complexity.
@@ -46,54 +49,54 @@ alwaysApply: false
 
 CONDENSED_TEMPLATE = """# Complexity Optimizer
 
-When asked to analyze, scan, audit, or review codebase complexity, follow this workflow.
+When asked to analyze, scan, audit, or review performance, find bottlenecks or inefficient code, or benchmark/profile code, follow this workflow.
 
 ## Core Rule
 
-Optimize only when current behavior is understood and can be preserved. Small proven improvement with tests > broad rewrite.
+Optimize only when current behavior is understood and can be preserved. Scanner output = leads, not proof: confirm input size and call frequency, and measure when the code can run.
 
-## Scanner
+Quality bar: a better algorithm or data structure (Set/Map index, bulk query, bounded concurrency, one accumulator, one sort, vectorized ops) with code at least as readable as before, using idiomatic built-ins and library APIs. No obscure micro-optimizations (unrolling, cached length, bit tricks, index loops over clear comprehensions) without a measured gain on a hot path; if the faster version is much harder to read, report the trade-off with numbers instead of applying it.
 
-Run first-pass analysis:
+## Tools
+
 ```bash
-python3 {scanner_path} . --format markdown
+python3 {tools_dir}/analyze_complexity.py . --format markdown   # ranked hotspots + 0-100 health score
+python3 {tools_dir}/analyze_complexity.py . --changed main      # only files changed vs main
+python3 {tools_dir}/measure_growth.py "python3 bench.py {{n}}"  # measured growth: x2 per doubling = O(n), x4 = O(n^2)
 ```
 
-Scanner output = leads, not proof. Inspect surrounding code for context.
+## Doctor Workflow
 
-## Default Report
+1. Baseline: stack, entry points, test/build commands.
+2. Scan: read the health score and top functions first, not the raw list.
+3. Triage each hotspot: How big does n get (request payload, DB table, config constant)? How often does it run (per request/render/row, cron, one-off)? Is the fix cheap and safe? Drop bounded or one-off leads with a one-line reason.
+4. Check what the scanner can't see: ORM lazy loading in loops/serializers, missing indexes (EXPLAIN ANALYZE), blocking I/O in async code, React re-render churn, row-by-row pandas, N+1 split across functions.
+5. Confirm with a profiler or measure_growth.py when the code can run.
+6. Report: findings table with mandatory columns (never drop one): Location | Current pattern | Current (Cost) | Future | Impact | Risk | Recommended change. Add evidence per finding (measured vs estimated) and the tests needed. State "No files modified" unless implementation was requested.
 
-Produce automatically when asked for analysis:
+## Optimize (only when asked)
 
-- Scope analyzed, stack/test commands detected
-- Top findings ranked by impact
-- Findings as a table, mandatory columns (never drop one): Location | Current pattern | Current (Cost) | Future | Impact | Risk | Recommended change
-- Tests/benchmarks needed
-- "No files modified" unless implementation requested
-
-## Workflow
-
-1. Baseline: language, framework, test/build commands, hot paths, existing tests.
-2. Rank: hot paths first. Algorithmic complexity > constant factors.
-3. Prove: tests for target function. Edge cases: empty, duplicates, ordering, nulls, errors, pagination.
-4. Optimize: maps/sets for lookups, indexing for nested scans, memoization for renders, bulk fetch for N+1.
-5. Verify: tests + lint/build, benchmark if non-obvious, report before/after.
-6. Benchmark (post-implementation only): generate temp script measuring original vs optimized. Python: timeit + tracemalloc. JS/TS: performance.now + process.memoryUsage. Use project fixtures first, synthetic fallback. Delete temp scripts after. Skip with reason if env restricted.
-7. Performance report: add `## Performance Benchmark` table (Function | Metric | Before | After | Delta | Change%). Auto-scale units. Include data source, iterations, runtime, dev-machine disclaimer.
-
-## Safety
-
-Before: data sizes matter? ordering preserved? identity safe? caches invalidated? auth/tenant preserved?
-After: narrow test → broad suite → benchmark → localized patch.
+Prove behavior with tests, optimize conservatively, run tests/lint/build, benchmark before vs after on the same machine and data (growth exponent plus speed/RAM), then add a `## Performance Benchmark` table (Function | Metric | Before | After | Delta | Change%) with data source, iterations, runtime, and a dev-machine disclaimer. Skip with a reason if the environment is restricted.
 
 ## Common Transforms
 
-- Nested lookup → map: O(a*b) → O(a+b)
-- Membership in loop → Set: O(n*m) → O(n+m)
-- Sort in loop → sort once: O(n^2 log n) → O(n log n)
-- Pairwise → sort+two-pointer: O(n^2) → O(n log n)
-- Render recompute → memoized selectors
-- N+1 → bulk fetch / joins / dataloaders
+- Nested lookup -> map/set index: O(a*b) -> O(a+b)
+- Query/API call per item -> bulk fetch, eager load, batch endpoint
+- Sequential awaits -> Promise.all / asyncio.gather with a concurrency limit
+- Spread / concat / pd.concat accumulation -> mutate one accumulator: O(n^2) -> O(n)
+- String += in Java/C#/Go/Kotlin loops -> StringBuilder / strings.Builder
+- pop(0) / shift() in loops -> deque
+- Sort in loop -> sort once, heap for top-k
+- Regex compile / deep copy per item -> hoist out of the loop
+- Row-by-row pandas -> vectorized columns, merge, groupby
+- Render-path filter/sort -> memoize, derive on the server, virtualize long lists
+
+## Safety
+
+Before: data sizes matter? ordering preserved? identity safe? caches invalidated? auth/tenant/pagination preserved? rate limits respected when parallelizing?
+After: narrow test -> broad suite -> benchmark -> localized patch.
+
+Good and bad practices per language and domain (Python, JS/TS, React, Go, JVM, C#, Ruby, Rust, SQL/ORM, data pipelines, CI pipelines): {references_url}
 """
 
 CONTINUE_TEMPLATE = """# Continue.dev Complexity Optimizer
@@ -101,33 +104,34 @@ CONTINUE_TEMPLATE = """# Continue.dev Complexity Optimizer
 
 customCommands:
   - name: complexity-report
-    description: Analyze codebase for algorithmic complexity hotspots
+    description: Find performance bottlenecks and inefficient algorithms
     prompt: |
-      Analyze this codebase for algorithmic complexity and performance hotspots.
+      Analyze this codebase for performance bottlenecks and algorithmic complexity.
 
-      Run the scanner first:
+      Run the scanner first (ranked hotspots + 0-100 health score):
       ```bash
       python3 ~/.continue/complexity-optimizer/analyze_complexity.py . --format markdown
       ```
 
-      Then produce a report with:
-      - Scope analyzed, stack/test commands detected
-      - Top findings ranked by impact
+      Then triage each top function: how big does n get, how often does it run, is the fix cheap and safe?
+      Drop bounded or one-off leads with a one-line reason. Also check what the scanner can't see:
+      ORM lazy loading, missing indexes, blocking I/O in async code, React re-renders, row-by-row pandas.
+
+      Report:
+      - Health score, scope analyzed, stack/test commands detected
       - Findings as a table, mandatory columns (never drop one): Location | Current pattern | Current (Cost) | Future | Impact | Risk | Recommended change
-      - Tests/benchmarks needed
+      - Evidence per finding (measured vs estimated) and the tests/benchmarks needed
 
       Follow these rules:
       - Only edit files if I explicitly ask to implement/fix/optimize
-      - Prefer maps/sets for lookups, indexing for nested scans, memoization for renders, bulk fetch for N+1
-      - Verify: tests + lint/build, benchmark if non-obvious
-      - Safety: preserve ordering, identity, auth/tenant constraints
+      - Prefer maps/sets for lookups, bulk fetches for N+1, bounded concurrency for sequential awaits, one accumulator instead of spread/concat
+      - Safety: preserve ordering, identity, auth/tenant constraints, rate limits
 
       After implementing optimizations, benchmark the changes:
-      - Generate a temp script measuring original vs optimized function (timeit+tracemalloc for Python, performance.now+process.memoryUsage for JS/TS)
-      - Use project fixtures first, synthetic data as fallback
-      - Report results in a Performance Benchmark table: Function | Metric | Before | After | Delta | Change%
-      - Auto-scale units (μs/ms/s, KB/MB/GB), include data source and dev-machine disclaimer
-      - Skip with reason if environment is restricted
+      - Growth order: python3 ~/.continue/complexity-optimizer/measure_growth.py "python3 bench.py {n}"
+      - Speed/RAM: timeit + tracemalloc (Python), performance.now + process.memoryUsage (JS/TS)
+      - Report a Performance Benchmark table: Function | Metric | Before | After | Delta | Change%
+      - Include data source and a dev-machine disclaimer; skip with a reason if the environment is restricted
 """
 
 
@@ -140,12 +144,14 @@ def generate() -> dict[Path, str]:
     files[ROOT / "agents/codex/SKILL.md"] = source.replace(
         "Use when asked to scan files,", "Use when Codex is asked to scan many files,", 1
     )
-    files[ROOT / "agents/claude/complexity-optimizer.md"] = source.replace(
-        "scripts/analyze_complexity.py", "~/.claude/commands/complexity-optimizer/analyze_complexity.py"
+    files[ROOT / "agents/claude/complexity-optimizer.md"] = (
+        source.replace("python3 scripts/", f"python3 {CLAUDE_TOOLS_DIR}/")
+        .replace("`scripts/", f"`{CLAUDE_TOOLS_DIR}/")
+        .replace("`references/", f"`{CLAUDE_TOOLS_DIR}/references/")
     )
 
-    for relpath, scanner_path in CONDENSED_TARGETS.items():
-        body = CONDENSED_TEMPLATE.format(scanner_path=scanner_path)
+    for relpath, tools_dir in CONDENSED_TARGETS.items():
+        body = CONDENSED_TEMPLATE.format(tools_dir=tools_dir, references_url=REFERENCES_URL)
         if relpath.endswith(".mdc"):
             body = CURSOR_FRONTMATTER + body
         files[ROOT / relpath] = body

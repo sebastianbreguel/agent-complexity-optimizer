@@ -4,12 +4,17 @@ Use this structure by default when asked for a complexity analysis, audit, scan,
 
 ## Summary
 
-- Scope analyzed:
+- Scope analyzed (whole repo, a path, or `--changed <base>`):
 - Stack detected:
 - Test/build commands detected:
+- Health score: `<n>/100 (<label>)` from the scanner, plus the baseline delta if one was used
 - Highest-impact hotspot:
 - Patch status: proposed / implemented / blocked
 - Files modified: yes / no
+
+## Top Functions
+
+The scanner's hotspot table (function, location, score, patterns), trimmed to the ones that survived triage. For each dropped hotspot, one line on why (bounded n, one-off script, already batched).
 
 ## Findings
 
@@ -29,7 +34,11 @@ Column meaning:
 - **Risk**: chance of changing observable behavior (High / Medium / Low).
 - **Recommended change**: the concrete transformation.
 
-After the table, for each finding add a short note covering why the pattern is costly, why behavior should remain equivalent, and the tests or measurements needed.
+After the table, for each finding add a short note covering:
+
+- **Evidence:** where n comes from and how often the code runs; "measured" (profile, benchmark, query count) or "estimated".
+- Why the pattern is costly, and why behavior should remain equivalent after the change.
+- The tests or measurements still needed.
 
 ## Changes Made
 
@@ -55,6 +64,7 @@ For each optimized function:
 |----------|--------|--------|-------|-------|--------|
 | `function_name` | Speed | | | | % |
 | `function_name` | RAM | | | | % |
+| `function_name` | Growth exponent (`measure_growth.py`) | | | | |
 
 - Data source:
 - Iterations:

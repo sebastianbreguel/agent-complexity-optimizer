@@ -31,4 +31,4 @@ This project extends the original Codex-only skill into a universal installer th
 | Amazon Q Developer | Rules `.md` | New |
 | Zed AI | Assistant rules | New |
 
-The Python scanner was extended with support for additional languages (Rust, Kotlin, Scala, Lua, Zig, Elixir, Erlang, Dart, R, Julia, OCaml, Clojure) and additional pattern detection (list comprehensions, generator expressions, more query patterns).
+The Python scanner was extended with support for additional languages (Rust, Kotlin, Scala, Lua, Zig, Elixir, Erlang, Dart, R, Julia, OCaml, Clojure) and additional pattern detection (list comprehensions, generator expressions, more query patterns). It was later restructured into the `complexity_scanner` package with ranked hotspots, a health score, new patterns (sequential awaits, quadratic accumulation, string building, pandas row loops, and more), diff/baseline modes for CI, `measure_growth.py`, and a labeled rule corpus with per-rule precision/recall.

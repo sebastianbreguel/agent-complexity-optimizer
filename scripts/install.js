@@ -38,7 +38,7 @@ function copyDir(src, dest) {
   fs.mkdirSync(path.dirname(dest), { recursive: true });
   fs.cpSync(src, dest, {
     recursive: true,
-    filter: (source) => !source.includes(`${path.sep}.DS_Store`),
+    filter: (source) => !source.includes(`${path.sep}.DS_Store`) && !source.includes(`${path.sep}__pycache__`),
   });
 }
 
@@ -49,6 +49,27 @@ function copyFile(src, dest) {
   }
   fs.mkdirSync(path.dirname(dest), { recursive: true });
   fs.cpSync(src, dest);
+}
+
+// Files earlier versions installed in places this version no longer uses.
+function removeStale(paths) {
+  for (const stale of paths) {
+    if (!fs.existsSync(stale)) continue;
+    if (dryRun) log(`  [dry-run] would remove ${stale}`);
+    else fs.rmSync(stale, { recursive: true, force: true });
+  }
+}
+
+// The scanner is a package (analyze_complexity.py + complexity_scanner/) plus helper scripts
+// such as measure_growth.py, so every agent gets the whole scripts directory.
+function copyScripts(dest) {
+  for (const entry of fs.readdirSync(skillScripts)) {
+    if (entry === "__pycache__" || entry === ".DS_Store") continue;
+    const source = path.join(skillScripts, entry);
+    const target = path.join(dest, entry);
+    if (fs.statSync(source).isDirectory()) copyDir(source, target);
+    else copyFile(source, target);
+  }
 }
 
 const HOME = os.homedir();
@@ -81,12 +102,15 @@ const AGENTS = [
     detect: () => fs.existsSync(path.join(HOME, ".claude")),
     install: () => {
       const cmdDir = path.join(HOME, ".claude", "commands", SKILL_NAME);
+      // Tools and references live outside commands/: Claude Code turns every .md there into a slash command.
+      const toolsDir = path.join(HOME, ".claude", SKILL_NAME);
       copyFile(
         path.join(agentsDir, "claude", "complexity-optimizer.md"),
         path.join(cmdDir, "complexity-optimizer.md")
       );
-      copyFile(analyzerScript, path.join(cmdDir, "analyze_complexity.py"));
-      copyDir(skillRefs, path.join(cmdDir, "references"));
+      removeStale([path.join(cmdDir, "references"), path.join(cmdDir, "analyze_complexity.py")]);
+      copyScripts(toolsDir);
+      copyDir(skillRefs, path.join(toolsDir, "references"));
     },
   },
   {
@@ -101,7 +125,7 @@ const AGENTS = [
         path.join(agentsDir, "cursor", "complexity-optimizer.mdc"),
         path.join(rulesDir, "complexity-optimizer.mdc")
       );
-      copyFile(analyzerScript, path.join(rulesDir, SKILL_NAME, "analyze_complexity.py"));
+      copyScripts(path.join(rulesDir, SKILL_NAME));
     },
   },
   {
@@ -115,7 +139,7 @@ const AGENTS = [
         path.join(agentsDir, "windsurf", ".windsurfrules"),
         path.join(dest, ".windsurfrules")
       );
-      copyFile(analyzerScript, path.join(dest, "analyze_complexity.py"));
+      copyScripts(dest);
     },
   },
   {
@@ -127,8 +151,8 @@ const AGENTS = [
     // not from the home directory — a global install cannot reach it.
     manual:
       "Copilot reads instructions per-repository. Copy agents/copilot/copilot-instructions.md " +
-      "into your repo's .github/ directory, and skills/complexity-optimizer/scripts/analyze_complexity.py " +
-      "into .github/complexity-optimizer/.",
+      "into your repo's .github/ directory, and the contents of skills/complexity-optimizer/scripts/ " +
+      "(analyze_complexity.py, measure_growth.py, complexity_scanner/) into .github/complexity-optimizer/.",
   },
   {
     name: "Gemini CLI",
@@ -139,7 +163,7 @@ const AGENTS = [
         path.join(agentsDir, "gemini", "GEMINI.md"),
         path.join(dest, "GEMINI.md")
       );
-      copyFile(analyzerScript, path.join(dest, "analyze_complexity.py"));
+      copyScripts(dest);
     },
   },
   {
@@ -153,7 +177,7 @@ const AGENTS = [
         path.join(agentsDir, "cline", ".clinerules"),
         path.join(dest, ".clinerules")
       );
-      copyFile(analyzerScript, path.join(dest, "analyze_complexity.py"));
+      copyScripts(dest);
     },
   },
   {
@@ -167,7 +191,7 @@ const AGENTS = [
         path.join(agentsDir, "aider", "CONVENTIONS.md"),
         path.join(dest, "CONVENTIONS.md")
       );
-      copyFile(analyzerScript, path.join(dest, "analyze_complexity.py"));
+      copyScripts(dest);
     },
   },
   {
@@ -181,7 +205,7 @@ const AGENTS = [
         path.join(agentsDir, "opencode", "AGENTS.md"),
         path.join(dest, "AGENTS.md")
       );
-      copyFile(analyzerScript, path.join(dest, "analyze_complexity.py"));
+      copyScripts(dest);
     },
   },
   {
@@ -193,7 +217,7 @@ const AGENTS = [
         path.join(agentsDir, "continue-dev", "config.yaml"),
         path.join(dest, "config.yaml")
       );
-      copyFile(analyzerScript, path.join(dest, "analyze_complexity.py"));
+      copyScripts(dest);
     },
   },
   {
@@ -205,7 +229,7 @@ const AGENTS = [
         path.join(agentsDir, "amazon-q", ".amazonq", "rules", "complexity-optimizer.md"),
         path.join(dest, "complexity-optimizer.md")
       );
-      copyFile(analyzerScript, path.join(dest, "analyze_complexity.py"));
+      copyScripts(dest);
     },
   },
   {
@@ -217,7 +241,7 @@ const AGENTS = [
         path.join(agentsDir, "zed", "complexity-optimizer.md"),
         path.join(dest, "complexity-optimizer.md")
       );
-      copyFile(analyzerScript, path.join(dest, "analyze_complexity.py"));
+      copyScripts(dest);
     },
   },
 ];
@@ -262,7 +286,7 @@ function main() {
   if (installed === 0) {
     log("");
     log("No agents detected. You can install manually:");
-    log("  1. Copy skills/complexity-optimizer/scripts/analyze_complexity.py to your agent's config dir");
+    log("  1. Copy the contents of skills/complexity-optimizer/scripts/ to your agent's config dir");
     log("  2. Copy the matching file from agents/<agent-name>/ alongside it");
   }
 
