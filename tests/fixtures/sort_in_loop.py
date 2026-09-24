@@ -1,7 +1,6 @@
-def sorted_batches(records, batch_size):
-    results = []
-    for i in range(0, len(records), batch_size):
-        batch = records[i:i + batch_size]
-        batch.sort(key=lambda x: x["score"])
-        results.extend(batch)
-    return results
+def leaders_per_round(rounds, scores):
+    leaders = []
+    for new_scores in rounds:
+        scores.extend(new_scores)
+        leaders.append(sorted(scores, reverse=True)[:3])
+    return leaders
