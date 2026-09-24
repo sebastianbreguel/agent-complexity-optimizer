@@ -17,8 +17,7 @@ class Report:
     scanned_lines: int
     skipped: dict[str, int]
     generated_files: list[str]  # listed so a wrongly skipped hand-written file is easy to spot
-    health: int | None
-    health_label: str
+    density: float | None  # None with --changed: a few files aren't comparable with the whole repo
     total_findings: int
     baseline: BaselineDiff | None
     hotspots: list[Hotspot]
@@ -31,9 +30,9 @@ def render_json(report: Report) -> str:
 
 def summary_lines(report: Report) -> list[str]:
     shown = len(report.findings)
-    health = f"{report.health}/100 ({report.health_label})" if report.health is not None else report.health_label
+    density = f"{report.density} points per 1,000 lines" if report.density is not None else "n/a (partial scan)"
     lines = [
-        f"**Health: {health}** · "
+        f"**Density: {density}** · "
         f"{report.scanned_files} files, {report.scanned_lines:,} lines scanned · {report.total_findings} findings"
         + (f" (showing the top {shown} by score; raise --max-findings for more)" if report.total_findings > shown else "")
     ]

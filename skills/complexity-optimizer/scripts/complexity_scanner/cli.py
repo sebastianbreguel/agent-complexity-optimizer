@@ -8,7 +8,7 @@ from pathlib import Path
 from .baseline import mark_new, read_baseline, write_baseline
 from .discovery import DEFAULT_EXCLUDES, changed_source_files, is_generated, is_test_path, list_source_files, read_text
 from .findings import SEVERITY_ORDER, Finding
-from .ranking import annotate, health_score, hotspots, rank
+from .ranking import annotate, density, hotspots, rank
 from .report import Report, render_json, render_markdown
 from .scanners import scan_source
 
@@ -18,7 +18,7 @@ def parse_args(argv: list[str] | None) -> tuple[argparse.ArgumentParser, argpars
     parser.add_argument("root", nargs="?", default=".", help="Repository or directory to scan.")
     parser.add_argument("--format", choices=["markdown", "json"], default="markdown")
     parser.add_argument("--exclude", action="append", default=[], help="Additional directory name to exclude.")
-    parser.add_argument("--max-findings", type=int, default=50, help="Findings to list (hotspots and health use all of them).")
+    parser.add_argument("--max-findings", type=int, default=50, help="Findings to list (hotspots and density use all of them).")
     parser.add_argument("--include-tests", action="store_true", help="Also scan test files (skipped by default).")
     parser.add_argument("--changed", metavar="BASE", help="Only scan files changed since the merge-base with BASE (e.g. main).")
     parser.add_argument(
@@ -75,18 +75,17 @@ def main(argv: list[str] | None = None) -> int:
         diff = mark_new(ranked, read_baseline(args.baseline), scan.scanned_paths) if args.baseline else None
     except (OSError, ValueError, KeyError) as exc:
         parser.error(f"--baseline {args.baseline}: {exc}")
+    if args.baseline:
+        ranked.sort(key=lambda f: f.status == "known")  # new findings first, score order kept within each group
     if args.write_baseline:
         write_baseline(args.write_baseline, ranked)
 
-    # A health score over a handful of changed files isn't comparable with the repo's, so it's omitted.
-    health, label = (None, "n/a (partial scan)") if args.changed else health_score(ranked, scan.scanned_lines)
     report = Report(
         scanned_files=len(scan.scanned_paths),
         scanned_lines=scan.scanned_lines,
         skipped={"tests": scan.skipped_tests, "generated": len(scan.generated_paths)},
         generated_files=scan.generated_paths,
-        health=health,
-        health_label=label,
+        density=None if args.changed else density(ranked, scan.scanned_lines),
         total_findings=len(ranked),
         baseline=diff,
         hotspots=hotspots(ranked),
